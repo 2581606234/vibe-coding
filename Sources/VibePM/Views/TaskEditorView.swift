@@ -31,53 +31,53 @@ struct TaskEditorView: View {
             Divider()
 
             Form {
-                Section("Task details") {
-                    TextField("Title", text: $draft.title)
+                Section(L10n.text("Task details")) {
+                    TextField(L10n.text("Title"), text: $draft.title)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("Description", text: $draft.taskDescription, axis: .vertical)
+                    TextField(L10n.text("Description"), text: $draft.taskDescription, axis: .vertical)
                         .lineLimit(3...6)
                 }
 
-                Section("Organization") {
-                    Picker("Status", selection: $draft.status) {
+                Section(L10n.text("Organization")) {
+                    Picker(L10n.text("Status"), selection: $draft.status) {
                         ForEach(TaskStatus.allCases, id: \.self) { status in
-                            Text(status.title).tag(status)
+                            Text(L10n.text(status.title)).tag(status)
                         }
                     }
 
-                    Picker("Priority", selection: $draft.priority) {
+                    Picker(L10n.text("Priority"), selection: $draft.priority) {
                         ForEach(TaskPriority.allCases, id: \.self) { priority in
-                            Label(priority.title, systemImage: "flag.fill")
+                            Label(L10n.text(priority.title), systemImage: "flag.fill")
                                 .foregroundStyle(priority.color)
                                 .tag(priority)
                         }
                     }
 
-                    Picker("Project", selection: $draft.projectID) {
-                        Label("Inbox", systemImage: "tray").tag(UUID?.none)
+                    Picker(L10n.text("Project"), selection: $draft.projectID) {
+                        Label(L10n.text("Inbox"), systemImage: "tray").tag(UUID?.none)
                         ForEach(projects) { project in
                             Label(project.name, systemImage: "folder.fill")
                                 .tag(Optional(project.id))
                         }
                     }
 
-                    Picker("Parent Task", selection: $draft.parentTaskID) {
-                        Text("None").tag(UUID?.none)
+                    Picker(L10n.text("Parent Task"), selection: $draft.parentTaskID) {
+                        Text(L10n.text("None")).tag(UUID?.none)
                         ForEach(eligibleParentTasks) { task in
                             Text(task.title).tag(Optional(task.id))
                         }
                     }
                 }
 
-                Section("Planning") {
+                Section(L10n.text("Planning")) {
                     OptionalDateField(
-                        title: "Schedule",
+                        title: L10n.text("Schedule"),
                         date: $draft.scheduledFor
                     )
 
                     OptionalDateField(
-                        title: "Due date",
+                        title: L10n.text("Due date"),
                         date: $draft.dueAt
                     )
                 }
@@ -114,7 +114,7 @@ struct TaskEditorView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(heading)
                     .font(.title2.weight(.semibold))
-                Text("Make the next action clear and achievable.")
+                Text(L10n.text("Make the next action clear and achievable."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -126,12 +126,12 @@ struct TaskEditorView: View {
     private var editorActions: some View {
         HStack {
             Spacer()
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
 
-            Button("Save") {
+            Button(L10n.text("Save")) {
                 onSave(draft)
                 dismiss()
             }

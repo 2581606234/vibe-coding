@@ -9,9 +9,9 @@ struct ProjectArchiveView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Archive")
+                Text(L10n.text("Archive"))
                     .font(.largeTitle.bold())
-                Text("Projects stay here with their Tasks until you restore them.")
+                Text(L10n.text("Projects stay here with their Tasks until you restore them."))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 28)
@@ -20,9 +20,9 @@ struct ProjectArchiveView: View {
 
             if projects.isEmpty {
                 ContentUnavailableView(
-                    "No Archived Projects",
+                    L10n.text("No Archived Projects"),
                     systemImage: "archivebox",
-                    description: Text("Projects you archive will appear here.")
+                    description: Text(L10n.text("Projects you archive will appear here."))
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -41,14 +41,14 @@ struct ProjectArchiveView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(project.name)
                                         .font(.headline)
-                                    Text("\(taskCount(project)) Tasks")
+                                    Text(L10n.format("%d Tasks", arguments: [taskCount(project)]))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
 
                                 Spacer()
 
-                                Button("Restore") {
+                                Button(L10n.text("Restore")) {
                                     onRestore(project)
                                 }
                                 .buttonStyle(.bordered)

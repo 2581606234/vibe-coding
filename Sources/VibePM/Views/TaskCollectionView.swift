@@ -5,6 +5,7 @@ struct TaskCollectionView: View {
     let title: String
     let subtitle: String
     let accent: Color
+    let headerSystemImage: String
     let tasks: [ProjectTask]
     let supportsBoard: Bool
     @Binding var viewMode: TaskViewMode
@@ -51,15 +52,15 @@ struct TaskCollectionView: View {
             ToolbarItemGroup {
                 if let onEditProject, let onArchiveProject {
                     Menu {
-                        Button("Edit Project", systemImage: "pencil", action: onEditProject)
-                        Button("Archive Project", systemImage: "archivebox", action: onArchiveProject)
+                        Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEditProject)
+                        Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchiveProject)
                     } label: {
-                        Label("Project actions", systemImage: "ellipsis.circle")
+                        Label(L10n.text("Project actions"), systemImage: "ellipsis.circle")
                     }
                 }
 
                 Button(action: onAdd) {
-                    Label("New Task", systemImage: "plus")
+                    Label(L10n.text("New Task"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(accent)
@@ -75,7 +76,7 @@ struct TaskCollectionView: View {
                     .fill(accent.gradient)
                     .frame(width: 48, height: 48)
                     .overlay {
-                        Image(systemName: title == "Today" ? "sun.max.fill" : "checklist")
+                        Image(systemName: headerSystemImage)
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.white)
                     }
@@ -94,9 +95,9 @@ struct TaskCollectionView: View {
                 Spacer()
 
                 if supportsBoard {
-                    Picker("View", selection: $viewMode) {
+                    Picker(L10n.text("View"), selection: $viewMode) {
                         ForEach(TaskViewMode.allCases, id: \.self) { mode in
-                            Label(mode.title, systemImage: mode.systemImage).tag(mode)
+                            Label(L10n.text(mode.title), systemImage: mode.systemImage).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -108,7 +109,7 @@ struct TaskCollectionView: View {
             HStack(spacing: 10) {
                 filterMenu
                 if priorityFilter != nil || statusFilter != nil {
-                    Button("Clear Filters", systemImage: "xmark.circle") {
+                    Button(L10n.text("Clear Filters"), systemImage: "xmark.circle") {
                         priorityFilter = nil
                         statusFilter = nil
                     }
@@ -124,22 +125,22 @@ struct TaskCollectionView: View {
 
     private var filterMenu: some View {
         Menu {
-            Picker("Priority", selection: $priorityFilter) {
-                Text("Any Priority").tag(TaskPriority?.none)
+            Picker(L10n.text("Priority"), selection: $priorityFilter) {
+                Text(L10n.text("Any Priority")).tag(TaskPriority?.none)
                 ForEach(TaskPriority.allCases.filter { $0 != .none }, id: \.self) { priority in
-                    Text(priority.title).tag(Optional(priority))
+                    Text(L10n.text(priority.title)).tag(Optional(priority))
                 }
             }
 
-            Picker("Status", selection: $statusFilter) {
-                Text("Any Status").tag(TaskStatus?.none)
+            Picker(L10n.text("Status"), selection: $statusFilter) {
+                Text(L10n.text("Any Status")).tag(TaskStatus?.none)
                 ForEach(TaskStatus.allCases, id: \.self) { status in
-                    Text(status.title).tag(Optional(status))
+                    Text(L10n.text(status.title)).tag(Optional(status))
                 }
             }
         } label: {
             Label(
-                priorityFilter == nil && statusFilter == nil ? "Filter" : "Filtered",
+                L10n.text(priorityFilter == nil && statusFilter == nil ? "Filter" : "Filtered"),
                 systemImage: "line.3.horizontal.decrease.circle"
             )
         }
@@ -206,13 +207,13 @@ struct TaskCollectionView: View {
             }
 
             VStack(spacing: 5) {
-                Text("Nothing here yet")
+                Text(L10n.text("Nothing here yet"))
                     .font(.title3.weight(.semibold))
-                Text("Capture the next concrete action when you are ready.")
+                Text(L10n.text("Capture the next concrete action when you are ready."))
                     .foregroundStyle(.secondary)
             }
 
-            Button("Create a Task", action: onAdd)
+            Button(L10n.text("Create a Task"), action: onAdd)
                 .buttonStyle(.borderedProminent)
                 .tint(accent)
         }
@@ -237,7 +238,7 @@ private struct TaskRowView: View {
                 Image(systemName: "arrow.turn.down.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                    .accessibilityLabel("Subtask")
+                    .accessibilityLabel(L10n.text("Subtask"))
             }
 
             Button(action: onToggleCompletion) {
@@ -246,7 +247,7 @@ private struct TaskRowView: View {
                     .foregroundStyle(task.status == .done ? accent : .secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(task.status == .done ? "Reopen Task" : "Complete Task")
+            .accessibilityLabel(L10n.text(task.status == .done ? "Reopen Task" : "Complete Task"))
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(task.title)
@@ -270,13 +271,13 @@ private struct TaskRowView: View {
 
             Menu {
                 ForEach(TaskStatus.allCases, id: \.self) { status in
-                    Button(status.title) {
+                    Button(L10n.text(status.title)) {
                         onMove(status)
                     }
                     .disabled(status == task.status)
                 }
             } label: {
-                Text(task.status.title)
+                Text(L10n.text(task.status.title))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(task.status == .done ? .green : accent)
                     .padding(.horizontal, 9)
@@ -292,7 +293,7 @@ private struct TaskRowView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Edit Task")
+                .accessibilityLabel(L10n.text("Edit Task"))
                 .transition(.opacity)
             }
         }
@@ -316,7 +317,7 @@ private struct TaskMetadataView: View {
     var body: some View {
         HStack(spacing: 10) {
             if task.priority != .none {
-                Label(task.priority.title, systemImage: "flag.fill")
+                Label(L10n.text(task.priority.title), systemImage: "flag.fill")
                     .foregroundStyle(task.priority.color)
             }
 

@@ -72,8 +72,7 @@ struct CountBadge: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(.primary.opacity(0.07), in: Capsule())
-                .accessibilityLabel("\(count) Tasks")
+                .accessibilityLabel(L10n.format("%d Tasks", arguments: [count]))
         }
     }
 }
-

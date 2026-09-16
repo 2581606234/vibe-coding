@@ -23,7 +23,8 @@ The current development release is ad-hoc signed rather than notarized with an A
 6. Archive the Project, then restore it from Archive.
 7. Open Settings → Data and export a JSON backup.
 8. Import the same backup and confirm records are merged rather than duplicated.
-9. Quit and reopen VibePM to confirm local persistence.
+9. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
+10. Quit and reopen VibePM to confirm local data and language selection persist.
 
 ## Build a fresh package
 
@@ -37,4 +38,3 @@ The current development release is ad-hoc signed rather than notarized with an A
 swift build
 swift test
 ```
-

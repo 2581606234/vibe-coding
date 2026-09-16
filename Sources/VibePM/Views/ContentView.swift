@@ -68,15 +68,15 @@ struct ContentView: View {
         .sheet(item: $projectEditorRequest) { request in
             projectEditor(for: request)
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search Tasks")
+        .searchable(text: $searchText, placement: .toolbar, prompt: L10n.text("Search Tasks"))
         .tint(VibeTheme.accent)
     }
 
     private var sidebar: some View {
         List(selection: $selection) {
-            Section("Focus") {
+            Section(L10n.text("Focus")) {
                 sidebarRow(
-                    title: "Inbox",
+                    title: L10n.text("Inbox"),
                     systemImage: "tray.fill",
                     count: inboxTaskCount,
                     color: .blue
@@ -84,7 +84,7 @@ struct ContentView: View {
                 .tag(SidebarSelection.inbox)
 
                 sidebarRow(
-                    title: "Today",
+                    title: L10n.text("Today"),
                     systemImage: "sun.max.fill",
                     count: todayTaskCount,
                     color: .orange
@@ -92,7 +92,7 @@ struct ContentView: View {
                 .tag(SidebarSelection.today)
             }
 
-            Section("Projects") {
+            Section(L10n.text("Projects")) {
                 ForEach(activeProjects) { project in
                     ProjectSidebarRow(
                         project: project,
@@ -102,7 +102,7 @@ struct ContentView: View {
                 }
 
                 Button(action: presentNewProject) {
-                    Label("New Project", systemImage: "plus")
+                    Label(L10n.text("New Project"), systemImage: "plus")
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -110,7 +110,7 @@ struct ContentView: View {
 
             Section {
                 sidebarRow(
-                    title: "Archive",
+                    title: L10n.text("Archive"),
                     systemImage: "archivebox.fill",
                     count: archivedProjects.count,
                     color: .secondary
@@ -139,6 +139,7 @@ struct ContentView: View {
                 title: detailTitle,
                 subtitle: detailSubtitle,
                 accent: detailAccent,
+                headerSystemImage: detailSystemImage,
                 tasks: filteredTasks,
                 supportsBoard: selectedProject != nil,
                 viewMode: $taskViewMode,
@@ -161,26 +162,26 @@ struct ContentView: View {
     private var detailTitle: String {
         switch selection {
         case .inbox, .none:
-            "Inbox"
+            L10n.text("Inbox")
         case .today:
-            "Today"
+            L10n.text("Today")
         case let .project(id):
-            projects.first(where: { $0.id == id })?.name ?? "Project"
+            projects.first(where: { $0.id == id })?.name ?? L10n.text("Project")
         case .archive:
-            "Archive"
+            L10n.text("Archive")
         }
     }
 
     private var detailSubtitle: String {
         switch selection {
         case .inbox, .none:
-            "Capture now. Organize when you are ready."
+            L10n.text("Capture now. Organize when you are ready.")
         case .today:
-            "A calm view of what needs your attention."
+            L10n.text("A calm view of what needs your attention.")
         case .project:
             selectedProject?.projectDescription.isEmpty == false
                 ? selectedProject?.projectDescription ?? ""
-                : "Move this Project toward its outcome."
+                : L10n.text("Move this Project toward its outcome.")
         case .archive:
             ""
         }
@@ -188,6 +189,14 @@ struct ContentView: View {
 
     private var detailAccent: Color {
         selectedProject?.accent.color ?? VibeTheme.accent
+    }
+
+    private var detailSystemImage: String {
+        switch selection {
+        case .today: "sun.max.fill"
+        case .project: "folder.fill"
+        default: "checklist"
+        }
     }
 
     private var filteredTasks: [ProjectTask] {
@@ -275,7 +284,7 @@ struct ContentView: View {
         switch request.mode {
         case .create:
             ProjectEditorView(
-                heading: "New Project",
+                heading: L10n.text("New Project"),
                 draft: ProjectDraft()
             ) { draft in
                 let project = draft.makeProject()
@@ -284,7 +293,7 @@ struct ContentView: View {
             }
         case let .edit(project):
             ProjectEditorView(
-                heading: "Edit Project",
+                heading: L10n.text("Edit Project"),
                 draft: ProjectDraft(project: project)
             ) { draft in
                 draft.apply(to: project)
@@ -317,7 +326,7 @@ struct ContentView: View {
         switch request.mode {
         case let .create(projectID, scheduledFor):
             TaskEditorView(
-                heading: "New Task",
+                heading: L10n.text("New Task"),
                 draft: TaskDraft(
                     projectID: projectID,
                     scheduledFor: scheduledFor
@@ -329,7 +338,7 @@ struct ContentView: View {
             }
         case let .edit(task):
             TaskEditorView(
-                heading: "Edit Task",
+                heading: L10n.text("Edit Task"),
                 draft: TaskDraft(task: task),
                 projects: activeProjects,
                 parentTasks: parentTaskCandidates(excluding: task.id)
@@ -383,7 +392,7 @@ private struct BrandHeader: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("VibePM")
                     .font(.headline)
-                Text("Make progress feel lighter")
+                Text(L10n.text("Make progress feel lighter"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

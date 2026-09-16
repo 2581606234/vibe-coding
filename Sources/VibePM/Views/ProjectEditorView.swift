@@ -25,15 +25,15 @@ struct ProjectEditorView: View {
             Divider()
 
             Form {
-                Section("Project details") {
-                    TextField("Name", text: $draft.name)
+                Section(L10n.text("Project details")) {
+                    TextField(L10n.text("Name"), text: $draft.name)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("Description", text: $draft.projectDescription, axis: .vertical)
+                    TextField(L10n.text("Description"), text: $draft.projectDescription, axis: .vertical)
                         .lineLimit(3...5)
                 }
 
-                Section("Accent") {
+                Section(L10n.text("Accent")) {
                     HStack(spacing: 14) {
                         ForEach(ProjectAccent.allCases, id: \.self) { accent in
                             Button {
@@ -55,7 +55,7 @@ struct ProjectEditorView: View {
                                     }
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(accent.title)
+                            .accessibilityLabel(L10n.text(accent.title))
                             .accessibilityAddTraits(draft.accent == accent ? .isSelected : [])
                         }
                     }
@@ -83,7 +83,7 @@ struct ProjectEditorView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(heading)
                     .font(.title2.weight(.semibold))
-                Text("Give this Project a clear outcome.")
+                Text(L10n.text("Give this Project a clear outcome."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -95,12 +95,12 @@ struct ProjectEditorView: View {
     private var editorActions: some View {
         HStack {
             Spacer()
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
 
-            Button("Save") {
+            Button(L10n.text("Save")) {
                 onSave(draft)
                 dismiss()
             }
@@ -112,4 +112,3 @@ struct ProjectEditorView: View {
         .padding()
     }
 }
-

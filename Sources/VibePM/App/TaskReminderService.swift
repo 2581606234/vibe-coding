@@ -35,7 +35,7 @@ enum TaskReminderService {
             guard let dueAt = task.dueAt else { continue }
 
             let content = UNMutableNotificationContent()
-            content.title = "Task due"
+            content.title = L10n.text("Task due")
             content.body = task.title
             content.sound = .default
 

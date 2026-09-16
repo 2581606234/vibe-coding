@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Query(sort: \ProjectTask.createdAt) private var tasks: [ProjectTask]
 
     @AppStorage("remindersEnabled") private var remindersEnabled = false
+    @AppStorage(AppLanguage.userDefaultsKey) private var appLanguageRawValue = AppLanguage.system.rawValue
     @State private var exportDocument: BackupDocument?
     @State private var isExporting = false
     @State private var isImporting = false
@@ -17,14 +18,19 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            generalSettings
+                .tabItem {
+                    Label(L10n.text("General"), systemImage: "gearshape")
+                }
+
             dataSettings
                 .tabItem {
-                    Label("Data", systemImage: "externaldrive")
+                    Label(L10n.text("Data"), systemImage: "externaldrive")
                 }
 
             reminderSettings
                 .tabItem {
-                    Label("Reminders", systemImage: "bell")
+                    Label(L10n.text("Reminders"), systemImage: "bell")
                 }
         }
         .frame(width: 520, height: 360)
@@ -36,9 +42,9 @@ struct SettingsView: View {
         ) { result in
             switch result {
             case .success:
-                showStatus("Backup exported successfully.")
+                showStatus(L10n.text("Backup exported successfully."))
             case let .failure(error):
-                showStatus("Export failed: \(error.localizedDescription)")
+                showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
             }
         }
         .fileImporter(
@@ -49,43 +55,60 @@ struct SettingsView: View {
             importBackup(result)
         }
         .alert("VibePM", isPresented: $showsStatus) {
-            Button("OK", role: .cancel) {}
+            Button(L10n.text("OK"), role: .cancel) {}
         } message: {
             Text(statusMessage ?? "")
         }
     }
 
+    private var generalSettings: some View {
+        Form {
+            Section(L10n.text("Language")) {
+                Picker(L10n.text("App language"), selection: $appLanguageRawValue) {
+                    Text(L10n.text("Follow System")).tag(AppLanguage.system.rawValue)
+                    Text("简体中文").tag(AppLanguage.simplifiedChinese.rawValue)
+                    Text("English").tag(AppLanguage.english.rawValue)
+                }
+                Text(L10n.text("Language changes apply immediately."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
     private var dataSettings: some View {
         Form {
-            Section("Your data") {
-                LabeledContent("Projects", value: projects.count.formatted())
-                LabeledContent("Tasks", value: tasks.count.formatted())
+            Section(L10n.text("Your data")) {
+                LabeledContent(L10n.text("Projects"), value: projects.count.formatted())
+                LabeledContent(L10n.text("Tasks"), value: tasks.count.formatted())
             }
 
-            Section("Backup") {
+            Section(L10n.text("Backup")) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Export JSON backup")
+                        Text(L10n.text("Export JSON backup"))
                             .font(.headline)
-                        Text("Includes every Project, Task, Subtask, Status, and date.")
+                        Text(L10n.text("Includes every Project, Task, Subtask, Status, and date."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Export…", action: exportBackup)
+                    Button(L10n.text("Export…"), action: exportBackup)
                         .buttonStyle(.borderedProminent)
                 }
 
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Import JSON backup")
+                        Text(L10n.text("Import JSON backup"))
                             .font(.headline)
-                        Text("Matching records are updated; other local data is preserved.")
+                        Text(L10n.text("Matching records are updated; other local data is preserved."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Import…") {
+                    Button(L10n.text("Import…")) {
                         isImporting = true
                     }
                 }
@@ -97,22 +120,22 @@ struct SettingsView: View {
 
     private var reminderSettings: some View {
         Form {
-            Section("Due dates") {
-                Toggle("Local Task reminders", isOn: reminderBinding)
-                Text("VibePM schedules a native notification for incomplete Tasks with a future due date. No Task data leaves this Mac.")
+            Section(L10n.text("Due dates")) {
+                Toggle(L10n.text("Local Task reminders"), isOn: reminderBinding)
+                Text(L10n.text("VibePM schedules a native notification for incomplete Tasks with a future due date. No Task data leaves this Mac."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if remindersEnabled {
                 Section {
-                    Button("Refresh scheduled reminders") {
+                    Button(L10n.text("Refresh scheduled reminders")) {
                         Task {
                             do {
                                 try await TaskReminderService.schedule(tasks: tasks)
-                                showStatus("Reminders refreshed.")
+                                showStatus(L10n.text("Reminders refreshed."))
                             } catch {
-                                showStatus("Unable to schedule reminders: \(error.localizedDescription)")
+                                showStatus(L10n.format("Unable to schedule reminders: %@", arguments: [error.localizedDescription]))
                             }
                         }
                     }
@@ -133,11 +156,11 @@ struct SettingsView: View {
                             let granted = try await TaskReminderService.enableAndSchedule(tasks: tasks)
                             remindersEnabled = granted
                             if !granted {
-                                showStatus("Notification permission was not granted.")
+                                showStatus(L10n.text("Notification permission was not granted."))
                             }
                         } catch {
                             remindersEnabled = false
-                            showStatus("Unable to enable reminders: \(error.localizedDescription)")
+                            showStatus(L10n.format("Unable to enable reminders: %@", arguments: [error.localizedDescription]))
                         }
                     }
                 } else {
@@ -159,7 +182,7 @@ struct SettingsView: View {
             exportDocument = BackupDocument(data: try backup.encoded())
             isExporting = true
         } catch {
-            showStatus("Export failed: \(error.localizedDescription)")
+            showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
         }
     }
 
@@ -175,7 +198,10 @@ struct SettingsView: View {
 
             let backup = try VibePMBackup.decoded(from: Data(contentsOf: url))
             try backup.restore(into: modelContext)
-            showStatus("Imported \(backup.projects.count) Projects and \(backup.tasks.count) Tasks.")
+            showStatus(L10n.format(
+                "Imported %d Projects and %d Tasks.",
+                arguments: [backup.projects.count, backup.tasks.count]
+            ))
 
             if remindersEnabled {
                 Task {
@@ -183,7 +209,7 @@ struct SettingsView: View {
                 }
             }
         } catch {
-            showStatus("Import failed: \(error.localizedDescription)")
+            showStatus(L10n.format("Import failed: %@", arguments: [error.localizedDescription]))
         }
     }
 

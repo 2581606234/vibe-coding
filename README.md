@@ -2,6 +2,13 @@
 
 A local-first personal project manager for macOS, built with SwiftUI and SwiftData.
 
+## Highlights
+
+- Native macOS list and board workflows
+- Projects, Tasks, Subtasks, priorities, due dates, and local reminders
+- Local-first SwiftData persistence with JSON backup and restore
+- Runtime language switching: Follow System, Simplified Chinese, or English
+
 ## Requirements
 
 - macOS 14 or later

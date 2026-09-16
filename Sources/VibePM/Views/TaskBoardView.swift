@@ -55,7 +55,7 @@ private struct BoardColumn: View {
                 Circle()
                     .fill(statusColor)
                     .frame(width: 8, height: 8)
-                Text(status.title)
+                Text(L10n.text(status.title))
                     .font(.headline)
                 Spacer()
                 CountBadge(count: tasks.count)
@@ -63,7 +63,7 @@ private struct BoardColumn: View {
             .padding(.horizontal, 3)
 
             if tasks.isEmpty {
-                Text("No Tasks")
+                Text(L10n.text("No Tasks"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, minHeight: 76)
@@ -106,7 +106,7 @@ private struct BoardTaskCard: View {
                 Spacer(minLength: 8)
                 Menu {
                     ForEach(TaskStatus.allCases, id: \.self) { status in
-                        Button(status.title) {
+                        Button(L10n.text(status.title)) {
                             onMove(status)
                         }
                         .disabled(status == task.status)
@@ -129,10 +129,10 @@ private struct BoardTaskCard: View {
             HStack(spacing: 8) {
                 if task.parentTaskID != nil {
                     Image(systemName: "arrow.turn.down.right")
-                        .accessibilityLabel("Subtask")
+                        .accessibilityLabel(L10n.text("Subtask"))
                 }
                 if task.priority != .none {
-                    Label(task.priority.title, systemImage: "flag.fill")
+                    Label(L10n.text(task.priority.title), systemImage: "flag.fill")
                         .foregroundStyle(task.priority.color)
                 }
                 Spacer()
