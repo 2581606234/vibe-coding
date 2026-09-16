@@ -28,7 +28,7 @@ Exit: a user can plan and execute a small real project entirely in VibePM.
 
 ## Milestone 3 — Own and trust the data
 
-- JSON export/import with schema versioning.
+- Excel export/import with stable record keys, typed dates, and a downloadable template.
 - Local notifications.
 - Migration and recovery tests.
 - Accessibility and performance review.

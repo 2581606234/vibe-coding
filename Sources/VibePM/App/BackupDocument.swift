@@ -1,8 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct BackupDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json] }
+extension UTType {
+    static let vibePMExcel = UTType(filenameExtension: "xlsx")!
+}
+
+struct SpreadsheetDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.vibePMExcel] }
 
     var data: Data
 
@@ -21,4 +25,3 @@ struct BackupDocument: FileDocument {
         FileWrapper(regularFileWithContents: data)
     }
 }
-

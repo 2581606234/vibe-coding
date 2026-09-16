@@ -20,6 +20,18 @@ public struct VibePMBackup: Codable, Equatable, Sendable {
         self.tasks = tasks.map(TaskRecord.init)
     }
 
+    init(
+        schemaVersion: Int,
+        exportedAt: Date,
+        projects: [ProjectRecord],
+        tasks: [TaskRecord]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.exportedAt = exportedAt
+        self.projects = projects
+        self.tasks = tasks
+    }
+
     public func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -82,6 +94,24 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
     public let isArchived: Bool
     public let accent: ProjectAccent
 
+    init(
+        id: UUID,
+        name: String,
+        projectDescription: String,
+        createdAt: Date,
+        updatedAt: Date,
+        isArchived: Bool,
+        accent: ProjectAccent
+    ) {
+        self.id = id
+        self.name = name
+        self.projectDescription = projectDescription
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.isArchived = isArchived
+        self.accent = accent
+    }
+
     init(project: Project) {
         id = project.id
         name = project.name
@@ -127,6 +157,34 @@ public struct TaskRecord: Codable, Equatable, Sendable {
     public let completedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date
+
+    init(
+        id: UUID,
+        title: String,
+        taskDescription: String,
+        status: TaskStatus,
+        priority: TaskPriority,
+        projectID: UUID?,
+        parentTaskID: UUID?,
+        scheduledFor: Date?,
+        dueAt: Date?,
+        completedAt: Date?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.title = title
+        self.taskDescription = taskDescription
+        self.status = status
+        self.priority = priority
+        self.projectID = projectID
+        self.parentTaskID = parentTaskID
+        self.scheduledFor = scheduledFor
+        self.dueAt = dueAt
+        self.completedAt = completedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 
     init(task: ProjectTask) {
         id = task.id

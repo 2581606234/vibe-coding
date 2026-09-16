@@ -157,20 +157,12 @@ private struct OptionalDateField: View {
     let title: String
     @Binding var date: Date?
     var minimumDate: Date?
+    @State private var showsCalendar = false
 
     init(title: String, date: Binding<Date?>, minimumDate: Date? = nil) {
         self.title = title
         _date = date
         self.minimumDate = minimumDate
-    }
-
-    private var isEnabled: Binding<Bool> {
-        Binding(
-            get: { date != nil },
-            set: { enabled in
-                date = enabled ? (date ?? minimumDate ?? .now) : nil
-            }
-        )
     }
 
     private var selectedDate: Binding<Date> {
@@ -185,33 +177,259 @@ private struct OptionalDateField: View {
 
     var body: some View {
         LabeledContent(title) {
-            HStack {
-                Toggle("", isOn: isEnabled)
-                    .labelsHidden()
-                if date != nil {
-                    if let minimumDate {
-                        DatePicker(
-                            "",
-                            selection: selectedDate,
-                            in: minimumDate...Date.distantFuture,
-                            displayedComponents: [.date]
-                        )
-                        .labelsHidden()
-                        .datePickerStyle(.field)
-                    } else {
-                        DatePicker(
-                            "",
-                            selection: selectedDate,
-                            displayedComponents: [.date]
-                        )
-                        .labelsHidden()
-                        .datePickerStyle(.field)
+            HStack(spacing: 8) {
+                Button {
+                    if date == nil {
+                        date = minimumDate ?? .now
                     }
+                    showsCalendar = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(VibeTheme.accent)
+
+                        if let date {
+                            Text(date.formatted(
+                                Date.FormatStyle.dateTime
+                                    .year()
+                                    .month(.wide)
+                                    .day()
+                                    .locale(L10n.selectedLanguage().locale())
+                            ))
+                                .foregroundStyle(.primary)
+                        } else {
+                            Text(L10n.text("Set date"))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 10)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(width: 250, height: 40)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(.primary.opacity(0.10), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $showsCalendar) {
+                    LargeDatePicker(
+                        title: title,
+                        date: selectedDate,
+                        minimumDate: minimumDate,
+                        onClose: { showsCalendar = false }
+                    )
+                }
+
+                if date != nil {
+                    Button {
+                        date = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.text("Clear date"))
+                    .accessibilityLabel(L10n.text("Clear date"))
                 } else {
-                    Text(L10n.text("Not set"))
-                        .foregroundStyle(.tertiary)
+                    Color.clear.frame(width: 20, height: 20)
                 }
             }
         }
+    }
+}
+
+private struct LargeDatePicker: View {
+    let title: String
+    @Binding var date: Date
+    let minimumDate: Date?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                    Text(date.formatted(
+                        Date.FormatStyle.dateTime
+                            .year()
+                            .month(.wide)
+                            .day()
+                            .locale(L10n.selectedLanguage().locale())
+                    ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(L10n.text("Today")) {
+                    date = max(Date.now, minimumDate ?? .distantPast)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            LargeCalendar(date: $date, minimumDate: minimumDate)
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button(L10n.text("Close"), action: onClose)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(18)
+        .frame(width: 430, height: 460)
+    }
+}
+
+private struct LargeCalendar: View {
+    @Binding var date: Date
+    let minimumDate: Date?
+    @State private var displayedMonth: Date
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
+
+    init(date: Binding<Date>, minimumDate: Date?) {
+        _date = date
+        self.minimumDate = minimumDate
+        _displayedMonth = State(initialValue: Self.monthStart(for: date.wrappedValue))
+    }
+
+    private var calendar: Calendar {
+        var calendar = Calendar.current
+        calendar.locale = L10n.selectedLanguage().locale()
+        return calendar
+    }
+
+    private var monthDays: [Date?] {
+        guard let range = calendar.range(of: .day, in: .month, for: displayedMonth) else {
+            return Array(repeating: nil, count: 42)
+        }
+        let weekday = calendar.component(.weekday, from: displayedMonth)
+        let leading = (weekday - calendar.firstWeekday + 7) % 7
+        var days = Array<Date?>(repeating: nil, count: leading)
+        days += range.compactMap { day in
+            calendar.date(bySetting: .day, value: day, of: displayedMonth)
+        }
+        days += Array(repeating: nil, count: max(0, 42 - days.count))
+        return Array(days.prefix(42))
+    }
+
+    private var weekdaySymbols: [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let offset = max(calendar.firstWeekday - 1, 0)
+        return Array(symbols[offset...] + symbols[..<offset])
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Button {
+                    changeMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 34, height: 30)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(L10n.text("Previous month"))
+
+                Spacer()
+                Text(monthTitle)
+                    .font(.title3.weight(.semibold))
+                Spacer()
+
+                Button {
+                    changeMonth(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 34, height: 30)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(L10n.text("Next month"))
+            }
+
+            LazyVGrid(columns: columns, spacing: 7) {
+                ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                    Text(symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                }
+
+                ForEach(Array(monthDays.enumerated()), id: \.offset) { _, day in
+                    if let day {
+                        dayButton(day)
+                    } else {
+                        Color.clear.frame(height: 36)
+                    }
+                }
+            }
+        }
+        .frame(width: 376)
+        .onChange(of: date) {
+            displayedMonth = Self.monthStart(for: date)
+        }
+    }
+
+    private func dayButton(_ day: Date) -> some View {
+        let isSelected = calendar.isDate(day, inSameDayAs: date)
+        let isToday = calendar.isDateInToday(day)
+        let isEnabled = minimumDate.map {
+            calendar.startOfDay(for: day) >= calendar.startOfDay(for: $0)
+        } ?? true
+
+        return Button {
+            guard isEnabled else { return }
+            date = calendar.startOfDay(for: day)
+        } label: {
+            Text(day.formatted(.dateTime.day()))
+                .font(.body.weight(isSelected ? .bold : .medium))
+                .foregroundStyle(
+                    isSelected ? Color.white : isEnabled ? Color.primary : Color.secondary.opacity(0.45)
+                )
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background {
+                    if isSelected {
+                        Circle().fill(VibeTheme.accent)
+                    } else if isToday {
+                        Circle().stroke(VibeTheme.accent.opacity(0.7), lineWidth: 1.5)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(day.formatted(
+            Date.FormatStyle.dateTime
+                .year()
+                .month(.wide)
+                .day()
+                .locale(L10n.selectedLanguage().locale())
+        ))
+    }
+
+    private var monthTitle: String {
+        displayedMonth.formatted(
+            Date.FormatStyle.dateTime
+                .year()
+                .month(.wide)
+                .locale(L10n.selectedLanguage().locale())
+        )
+    }
+
+    private func changeMonth(by value: Int) {
+        displayedMonth = calendar.date(byAdding: .month, value: value, to: displayedMonth) ?? displayedMonth
+    }
+
+    private static func monthStart(for date: Date) -> Date {
+        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: date)) ?? date
     }
 }

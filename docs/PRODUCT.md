@@ -19,7 +19,7 @@ VibePM is a fast, local-first macOS project manager for individuals who want to 
 - Subtasks: one level of parent-child organization.
 - Views: Inbox, Today, Projects, and per-Project List, Board, and Gantt planning.
 - Productivity: keyboard-first quick capture, search, and native notifications.
-- Ownership: local persistence plus JSON export and import.
+- Ownership: local persistence plus editable Excel export/import and a downloadable import template.
 - Quality: dark mode, accessibility labels, undo for destructive actions, and deterministic data migrations.
 
 ## Explicitly deferred

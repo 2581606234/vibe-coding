@@ -107,6 +107,14 @@ public enum L10n {
         "Your data": "你的数据",
         "Tasks": "任务",
         "Backup": "备份",
+        "Excel import and export": "Excel 导入与导出",
+        "Export Excel workbook": "导出 Excel 工作簿",
+        "Exports Projects and Tasks as editable Excel worksheets.": "将项目和任务导出为可编辑的 Excel 工作表。",
+        "Import Excel workbook": "导入 Excel 工作簿",
+        "Use the template for field names, allowed values, and examples.": "可先下载模板，查看字段名称、可用值和填写示例。",
+        "Template…": "下载模板…",
+        "Excel workbook exported successfully.": "Excel 工作簿导出成功。",
+        "Excel import template saved successfully.": "Excel 导入模板保存成功。",
         "Export JSON backup": "导出 JSON 备份",
         "Includes every Project, Task, Subtask, Status, and date.": "包含所有项目、任务、子任务、状态和日期。",
         "Export…": "导出…",
@@ -125,7 +133,13 @@ public enum L10n {
         "Unable to enable reminders: %@": "无法启用提醒：%@",
         "Imported %d Projects and %d Tasks.": "已导入 %d 个项目和 %d 个任务。",
         "Import failed: %@": "导入失败：%@",
-        "Task due": "任务到期"
+        "Task due": "任务到期",
+        "Set date": "设置日期",
+        "Clear date": "清除日期",
+        "Choose date": "选择日期",
+        "Previous month": "上个月",
+        "Next month": "下个月",
+        "Close": "关闭"
     ]
 
     public static func selectedLanguage(defaults: UserDefaults = .standard) -> AppLanguage {

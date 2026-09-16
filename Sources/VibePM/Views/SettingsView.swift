@@ -10,7 +10,9 @@ struct SettingsView: View {
 
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage(AppLanguage.userDefaultsKey) private var appLanguageRawValue = AppLanguage.system.rawValue
-    @State private var exportDocument: BackupDocument?
+    @State private var exportDocument: SpreadsheetDocument?
+    @State private var exportFilename = "VibePM"
+    @State private var exportSuccessMessage = ""
     @State private var isExporting = false
     @State private var isImporting = false
     @State private var statusMessage: String?
@@ -33,23 +35,23 @@ struct SettingsView: View {
                     Label(L10n.text("Reminders"), systemImage: "bell")
                 }
         }
-        .frame(width: 520, height: 360)
+        .frame(width: 600, height: 430)
         .fileExporter(
             isPresented: $isExporting,
             document: exportDocument,
-            contentType: .json,
-            defaultFilename: backupFilename
+            contentType: .vibePMExcel,
+            defaultFilename: exportFilename
         ) { result in
             switch result {
             case .success:
-                showStatus(L10n.text("Backup exported successfully."))
+                showStatus(exportSuccessMessage)
             case let .failure(error):
                 showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
             }
         }
         .fileImporter(
             isPresented: $isImporting,
-            allowedContentTypes: [.json],
+            allowedContentTypes: [.vibePMExcel],
             allowsMultipleSelection: false
         ) { result in
             importBackup(result)
@@ -85,31 +87,44 @@ struct SettingsView: View {
                 LabeledContent(L10n.text("Tasks"), value: tasks.count.formatted())
             }
 
-            Section(L10n.text("Backup")) {
+            Section(L10n.text("Excel import and export")) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.text("Export JSON backup"))
+                        Text(L10n.text("Export Excel workbook"))
                             .font(.headline)
-                        Text(L10n.text("Includes every Project, Task, Subtask, Status, and date."))
+                        Text(L10n.text("Exports Projects and Tasks as editable Excel worksheets."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(L10n.text("Export…"), action: exportBackup)
+                    Button(action: exportWorkbook) {
+                        Label(L10n.text("Export…"), systemImage: "square.and.arrow.up")
+                    }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                 }
 
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.text("Import JSON backup"))
+                        Text(L10n.text("Import Excel workbook"))
                             .font(.headline)
-                        Text(L10n.text("Matching records are updated; other local data is preserved."))
+                        Text(L10n.text("Use the template for field names, allowed values, and examples."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(L10n.text("Import…")) {
-                        isImporting = true
+                    HStack(spacing: 8) {
+                        Button(action: exportTemplate) {
+                            Label(L10n.text("Template…"), systemImage: "arrow.down.doc")
+                        }
+                        .controlSize(.large)
+
+                        Button {
+                            isImporting = true
+                        } label: {
+                            Label(L10n.text("Import…"), systemImage: "square.and.arrow.down")
+                        }
+                        .controlSize(.large)
                     }
                 }
             }
@@ -171,15 +186,28 @@ struct SettingsView: View {
         )
     }
 
-    private var backupFilename: String {
+    private var workbookFilename: String {
         let date = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash))
-        return "VibePM-Backup-\(date)"
+        return "VibePM-Data-\(date)"
     }
 
-    private func exportBackup() {
+    private func exportWorkbook() {
         do {
-            let backup = VibePMBackup(projects: projects, tasks: tasks)
-            exportDocument = BackupDocument(data: try backup.encoded())
+            let workbook = VibePMExcelWorkbook(projects: projects, tasks: tasks)
+            exportDocument = SpreadsheetDocument(data: try workbook.encoded())
+            exportFilename = workbookFilename
+            exportSuccessMessage = L10n.text("Excel workbook exported successfully.")
+            isExporting = true
+        } catch {
+            showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
+        }
+    }
+
+    private func exportTemplate() {
+        do {
+            exportDocument = SpreadsheetDocument(data: try VibePMExcelWorkbook.templateData())
+            exportFilename = "VibePM-Import-Template"
+            exportSuccessMessage = L10n.text("Excel import template saved successfully.")
             isExporting = true
         } catch {
             showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
@@ -196,11 +224,11 @@ struct SettingsView: View {
                 }
             }
 
-            let backup = try VibePMBackup.decoded(from: Data(contentsOf: url))
-            try backup.restore(into: modelContext)
+            let workbook = try VibePMExcelWorkbook.decoded(from: Data(contentsOf: url))
+            try workbook.restore(into: modelContext)
             showStatus(L10n.format(
                 "Imported %d Projects and %d Tasks.",
-                arguments: [backup.projects.count, backup.tasks.count]
+                arguments: [workbook.projects.count, workbook.tasks.count]
             ))
 
             if remindersEnabled {

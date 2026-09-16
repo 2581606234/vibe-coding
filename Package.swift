@@ -11,8 +11,14 @@ let package = Package(
         .library(name: "VibePMCore", targets: ["VibePMCore"]),
         .executable(name: "VibePM", targets: ["VibePM"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.20")
+    ],
     targets: [
-        .target(name: "VibePMCore"),
+        .target(
+            name: "VibePMCore",
+            dependencies: ["ZIPFoundation"]
+        ),
         .executableTarget(
             name: "VibePM",
             dependencies: ["VibePMCore"]
@@ -23,4 +29,3 @@ let package = Package(
         )
     ]
 )
-

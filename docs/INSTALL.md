@@ -22,8 +22,8 @@ The current development release is ad-hoc signed rather than notarized with an A
 5. Move Tasks between Status columns using the status menu.
 6. Search and apply a priority or Status filter.
 7. Archive the Project, then restore it from Archive.
-8. Open Settings → Data and export a JSON backup.
-9. Import the same backup and confirm records are merged rather than duplicated.
+8. Open Settings → Data, download the Excel template, and confirm it opens with Projects, Tasks, and Instructions worksheets.
+9. Export an Excel workbook, import the same workbook, and confirm records are merged rather than duplicated.
 10. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
 11. Quit and reopen VibePM to confirm local data and language selection persist.
 
