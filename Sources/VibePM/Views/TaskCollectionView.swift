@@ -7,7 +7,7 @@ struct TaskCollectionView: View {
     let accent: Color
     let headerSystemImage: String
     let tasks: [ProjectTask]
-    let supportsBoard: Bool
+    let supportsProjectViews: Bool
     @Binding var viewMode: TaskViewMode
     @Binding var priorityFilter: TaskPriority?
     @Binding var statusFilter: TaskStatus?
@@ -36,12 +36,18 @@ struct TaskCollectionView: View {
 
             if tasks.isEmpty {
                 emptyState
-            } else if supportsBoard && viewMode == .board {
+            } else if supportsProjectViews && viewMode == .board {
                 TaskBoardView(
                     tasks: tasks,
                     accent: accent,
                     onEdit: onEdit,
                     onMove: onMove
+                )
+            } else if supportsProjectViews && viewMode == .gantt {
+                GanttView(
+                    tasks: tasks,
+                    accent: accent,
+                    onEdit: onEdit
                 )
             } else {
                 taskList
@@ -94,14 +100,14 @@ struct TaskCollectionView: View {
 
                 Spacer()
 
-                if supportsBoard {
+                if supportsProjectViews {
                     Picker(L10n.text("View"), selection: $viewMode) {
                         ForEach(TaskViewMode.allCases, id: \.self) { mode in
                             Label(L10n.text(mode.title), systemImage: mode.systemImage).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 150)
+                    .frame(width: 238)
                     .labelsHidden()
                 }
             }
@@ -277,14 +283,27 @@ private struct TaskRowView: View {
                     .disabled(status == task.status)
                 }
             } label: {
-                Text(L10n.text(task.status.title))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(task.status == .done ? .green : accent)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background((task.status == .done ? Color.green : accent).opacity(0.09), in: Capsule())
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(task.status == .done ? Color.green : accent)
+                        .frame(width: 6, height: 6)
+                    Text(L10n.text(task.status.title))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(task.status == .done ? .green : accent)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((task.status == .done ? Color.green : accent).opacity(0.09), in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke((task.status == .done ? Color.green : accent).opacity(0.14), lineWidth: 1)
+                }
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
 
             if isHovering {

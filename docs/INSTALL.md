@@ -18,13 +18,14 @@ The current development release is ad-hoc signed rather than notarized with an A
 1. Create a Project with an accent color.
 2. Create a Task with a priority and due date.
 3. Create a second Task and assign the first Task as its parent.
-4. Switch the Project to Board and move Tasks between Status columns using the status menu.
-5. Search and apply a priority or Status filter.
-6. Archive the Project, then restore it from Archive.
-7. Open Settings → Data and export a JSON backup.
-8. Import the same backup and confirm records are merged rather than duplicated.
-9. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
-10. Quit and reopen VibePM to confirm local data and language selection persist.
+4. Switch the Project between List, Board, and Gantt; confirm scheduled Tasks appear on the timeline.
+5. Move Tasks between Status columns using the status menu.
+6. Search and apply a priority or Status filter.
+7. Archive the Project, then restore it from Archive.
+8. Open Settings → Data and export a JSON backup.
+9. Import the same backup and confirm records are merged rather than duplicated.
+10. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
+11. Quit and reopen VibePM to confirm local data and language selection persist.
 
 ## Build a fresh package
 

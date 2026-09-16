@@ -28,6 +28,10 @@ _Avoid_: Daily list, agenda
 A status-grouped view of Tasks within a Project.
 _Avoid_: Kanban, pipeline
 
+**Gantt**:
+A time-scaled Project view that places Tasks between their scheduled and due dates.
+_Avoid_: Roadmap, calendar
+
 **Status**:
 The current workflow state of a Task: to do, in progress, or done.
 _Avoid_: Stage, column
@@ -35,4 +39,3 @@ _Avoid_: Stage, column
 **Archive**:
 A collection of Projects intentionally removed from active planning without deleting their history.
 _Avoid_: Trash, deleted projects
-

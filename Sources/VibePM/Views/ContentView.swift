@@ -74,6 +74,11 @@ struct ContentView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
+            BrandHeader()
+                .listRowInsets(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 12))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
             Section(L10n.text("Focus")) {
                 sidebarRow(
                     title: L10n.text("Inbox"),
@@ -120,10 +125,6 @@ struct ContentView: View {
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 300)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            BrandHeader()
-            Divider()
-        }
     }
 
     @ViewBuilder
@@ -141,7 +142,7 @@ struct ContentView: View {
                 accent: detailAccent,
                 headerSystemImage: detailSystemImage,
                 tasks: filteredTasks,
-                supportsBoard: selectedProject != nil,
+                supportsProjectViews: selectedProject != nil,
                 viewMode: $taskViewMode,
                 priorityFilter: $priorityFilter,
                 statusFilter: $statusFilter,
@@ -398,9 +399,7 @@ private struct BrandHeader: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 2)
     }
 }
 

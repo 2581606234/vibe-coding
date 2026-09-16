@@ -36,7 +36,20 @@ struct TaskEditorView: View {
                         .textFieldStyle(.roundedBorder)
 
                     TextField(L10n.text("Description"), text: $draft.taskDescription, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(2...4)
+                }
+
+                Section(L10n.text("Planning")) {
+                    OptionalDateField(
+                        title: L10n.text("Schedule"),
+                        date: $draft.scheduledFor
+                    )
+
+                    OptionalDateField(
+                        title: L10n.text("Due date"),
+                        date: $draft.dueAt,
+                        minimumDate: draft.scheduledFor
+                    )
                 }
 
                 Section(L10n.text("Organization")) {
@@ -70,28 +83,24 @@ struct TaskEditorView: View {
                     }
                 }
 
-                Section(L10n.text("Planning")) {
-                    OptionalDateField(
-                        title: L10n.text("Schedule"),
-                        date: $draft.scheduledFor
-                    )
-
-                    OptionalDateField(
-                        title: L10n.text("Due date"),
-                        date: $draft.dueAt
-                    )
-                }
             }
             .formStyle(.grouped)
 
             Divider()
             editorActions
         }
-        .frame(width: 520, height: 560)
+        .frame(width: 580, height: 560)
         .onChange(of: draft.projectID) {
             if let parentTaskID = draft.parentTaskID,
                !eligibleParentTasks.contains(where: { $0.id == parentTaskID }) {
                 draft.parentTaskID = nil
+            }
+        }
+        .onChange(of: draft.scheduledFor) {
+            if let scheduledFor = draft.scheduledFor,
+               let dueAt = draft.dueAt,
+               dueAt < scheduledFor {
+                draft.dueAt = scheduledFor
             }
         }
     }
@@ -147,19 +156,29 @@ struct TaskEditorView: View {
 private struct OptionalDateField: View {
     let title: String
     @Binding var date: Date?
+    var minimumDate: Date?
+
+    init(title: String, date: Binding<Date?>, minimumDate: Date? = nil) {
+        self.title = title
+        _date = date
+        self.minimumDate = minimumDate
+    }
 
     private var isEnabled: Binding<Bool> {
         Binding(
             get: { date != nil },
             set: { enabled in
-                date = enabled ? (date ?? .now) : nil
+                date = enabled ? (date ?? minimumDate ?? .now) : nil
             }
         )
     }
 
     private var selectedDate: Binding<Date> {
         Binding(
-            get: { date ?? .now },
+            get: {
+                guard let minimumDate else { return date ?? .now }
+                return max(date ?? minimumDate, minimumDate)
+            },
             set: { date = $0 }
         )
     }
@@ -170,12 +189,27 @@ private struct OptionalDateField: View {
                 Toggle("", isOn: isEnabled)
                     .labelsHidden()
                 if date != nil {
-                    DatePicker(
-                        "",
-                        selection: selectedDate,
-                        displayedComponents: [.date]
-                    )
-                    .labelsHidden()
+                    if let minimumDate {
+                        DatePicker(
+                            "",
+                            selection: selectedDate,
+                            in: minimumDate...Date.distantFuture,
+                            displayedComponents: [.date]
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.field)
+                    } else {
+                        DatePicker(
+                            "",
+                            selection: selectedDate,
+                            displayedComponents: [.date]
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.field)
+                    }
+                } else {
+                    Text(L10n.text("Not set"))
+                        .foregroundStyle(.tertiary)
                 }
             }
         }

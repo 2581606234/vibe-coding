@@ -20,7 +20,7 @@ Exit: the primary workflow works without data loss across launches.
 ## Milestone 2 — Plan and focus
 
 - Today view and scheduling.
-- Project Board with status transitions.
+- Project Board with status transitions and a schedule-to-due-date Gantt view.
 - Subtasks, search, sorting, and filtering.
 - Undo and keyboard shortcuts.
 
@@ -42,4 +42,3 @@ Exit: release-candidate quality with documented backup and recovery.
 - Package a signed DMG; evaluate the Mac App Store separately.
 
 Exit: a clean Mac can install, launch, update, and remove VibePM safely.
-

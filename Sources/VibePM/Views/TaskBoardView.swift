@@ -4,6 +4,7 @@ import VibePMCore
 enum TaskViewMode: String, CaseIterable {
     case list
     case board
+    case gantt
 
     var title: String {
         rawValue.capitalized
@@ -13,6 +14,7 @@ enum TaskViewMode: String, CaseIterable {
         switch self {
         case .list: "list.bullet"
         case .board: "rectangle.split.3x1"
+        case .gantt: "chart.bar.xaxis"
         }
     }
 }
