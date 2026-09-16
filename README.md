@@ -21,5 +21,12 @@ swift build
 swift test
 ```
 
-Product scope lives in `docs/PRODUCT.md`; delivery milestones live in `docs/ROADMAP.md`.
+## Package for installation
 
+```sh
+./scripts/package_app.sh
+```
+
+The script creates `dist/VibePM.app` and `dist/VibePM.dmg`. See `docs/INSTALL.md` for installation and acceptance testing.
+
+Product scope lives in `docs/PRODUCT.md`; delivery milestones live in `docs/ROADMAP.md`.
