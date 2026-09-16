@@ -18,16 +18,8 @@ struct TaskCollectionView: View {
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
 
-    private var parentTasks: [ProjectTask] {
-        tasks.filter { $0.parentTaskID == nil }
-    }
-
-    private var orphanSubtasks: [ProjectTask] {
-        let visibleParentIDs = Set(parentTasks.map(\.id))
-        return tasks.filter { task in
-            guard let parentTaskID = task.parentTaskID else { return false }
-            return !visibleParentIDs.contains(parentTaskID)
-        }
+    private var orderedTasks: [ProjectTask] {
+        TaskHierarchy.parentFirst(tasks)
     }
 
     var body: some View {
@@ -157,48 +149,21 @@ struct TaskCollectionView: View {
     private var taskList: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
-                ForEach(parentTasks) { task in
+                ForEach(orderedTasks) { task in
                     TaskRowView(
                         task: task,
                         accent: accent,
-                        isSubtask: false,
+                        isSubtask: task.parentTaskID != nil,
                         onEdit: { onEdit(task) },
                         onToggleCompletion: { onToggleCompletion(task) },
                         onMove: { onMove(task, $0) }
                     )
-
-                    ForEach(subtasks(for: task)) { subtask in
-                        TaskRowView(
-                            task: subtask,
-                            accent: accent,
-                            isSubtask: true,
-                            onEdit: { onEdit(subtask) },
-                            onToggleCompletion: { onToggleCompletion(subtask) },
-                            onMove: { onMove(subtask, $0) }
-                        )
-                        .padding(.leading, 30)
-                    }
-                }
-
-                ForEach(orphanSubtasks) { subtask in
-                    TaskRowView(
-                        task: subtask,
-                        accent: accent,
-                        isSubtask: true,
-                        onEdit: { onEdit(subtask) },
-                        onToggleCompletion: { onToggleCompletion(subtask) },
-                        onMove: { onMove(subtask, $0) }
-                    )
-                    .padding(.leading, 30)
+                    .padding(.leading, task.parentTaskID == nil ? 0 : 30)
                 }
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 28)
         }
-    }
-
-    private func subtasks(for task: ProjectTask) -> [ProjectTask] {
-        tasks.filter { $0.parentTaskID == task.id }
     }
 
     private var emptyState: some View {

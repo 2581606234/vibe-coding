@@ -11,6 +11,10 @@ struct GanttView: View {
     private let dayWidth: CGFloat = 46
     private let rowHeight: CGFloat = 54
 
+    private var orderedTasks: [ProjectTask] {
+        TaskHierarchy.parentFirst(tasks)
+    }
+
     private var intervals: [TaskTimelineInterval] {
         tasks.compactMap {
             TaskTimelineInterval(
@@ -38,8 +42,8 @@ struct GanttView: View {
             VStack(alignment: .leading, spacing: 0) {
                 timelineHeader
 
-                ForEach(tasks.indices, id: \.self) { index in
-                    taskRow(tasks[index], index: index)
+                ForEach(orderedTasks.indices, id: \.self) { index in
+                    taskRow(orderedTasks[index], index: index)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
