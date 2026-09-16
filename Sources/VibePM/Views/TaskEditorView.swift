@@ -24,66 +24,97 @@ struct TaskEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(heading)
-                    .font(.title2.weight(.semibold))
-                Spacer()
-            }
-            .padding()
-
+            editorHeader
             Divider()
 
             Form {
-                TextField("Title", text: $draft.title)
-                    .textFieldStyle(.roundedBorder)
+                Section("Task details") {
+                    TextField("Title", text: $draft.title)
+                        .textFieldStyle(.roundedBorder)
 
-                TextField("Description", text: $draft.taskDescription, axis: .vertical)
-                    .lineLimit(3...6)
+                    TextField("Description", text: $draft.taskDescription, axis: .vertical)
+                        .lineLimit(3...6)
+                }
 
-                Picker("Priority", selection: $draft.priority) {
-                    ForEach(TaskPriority.allCases, id: \.self) { priority in
-                        Text(priority.title).tag(priority)
+                Section("Organization") {
+                    Picker("Priority", selection: $draft.priority) {
+                        ForEach(TaskPriority.allCases, id: \.self) { priority in
+                            Label(priority.title, systemImage: "flag.fill")
+                                .foregroundStyle(priority.color)
+                                .tag(priority)
+                        }
+                    }
+
+                    Picker("Project", selection: $draft.projectID) {
+                        Label("Inbox", systemImage: "tray").tag(UUID?.none)
+                        ForEach(projects) { project in
+                            Label(project.name, systemImage: "folder.fill")
+                                .tag(Optional(project.id))
+                        }
                     }
                 }
 
-                Picker("Project", selection: $draft.projectID) {
-                    Text("Inbox").tag(UUID?.none)
-                    ForEach(projects) { project in
-                        Text(project.name).tag(Optional(project.id))
-                    }
+                Section("Planning") {
+                    OptionalDateField(
+                        title: "Schedule",
+                        date: $draft.scheduledFor
+                    )
+
+                    OptionalDateField(
+                        title: "Due date",
+                        date: $draft.dueAt
+                    )
                 }
-
-                OptionalDateField(
-                    title: "Schedule",
-                    date: $draft.scheduledFor
-                )
-
-                OptionalDateField(
-                    title: "Due date",
-                    date: $draft.dueAt
-                )
             }
             .formStyle(.grouped)
 
             Divider()
-
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button("Save") {
-                    onSave(draft)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!draft.canSave)
-            }
-            .padding()
+            editorActions
         }
-        .frame(width: 520, height: 520)
+        .frame(width: 520, height: 560)
+    }
+
+    private var editorHeader: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(VibeTheme.brandGradient)
+                .frame(width: 36, height: 36)
+                .overlay {
+                    Image(systemName: "checkmark")
+                        .font(.body.bold())
+                        .foregroundStyle(.white)
+                }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(heading)
+                    .font(.title2.weight(.semibold))
+                Text("Make the next action clear and achievable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding()
+    }
+
+    private var editorActions: some View {
+        HStack {
+            Spacer()
+            Button("Cancel", role: .cancel) {
+                dismiss()
+            }
+            .keyboardShortcut(.cancelAction)
+
+            Button("Save") {
+                onSave(draft)
+                dismiss()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(VibeTheme.accent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(!draft.canSave)
+        }
+        .padding()
     }
 }
 
@@ -124,4 +155,3 @@ private struct OptionalDateField: View {
         }
     }
 }
-

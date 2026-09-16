@@ -6,12 +6,23 @@ private enum SidebarSelection: Hashable {
     case inbox
     case today
     case project(UUID)
+    case archive
 }
 
 private struct TaskEditorRequest: Identifiable {
     enum Mode {
         case create(projectID: UUID?, scheduledFor: Date?)
         case edit(ProjectTask)
+    }
+
+    let id = UUID()
+    let mode: Mode
+}
+
+private struct ProjectEditorRequest: Identifiable {
+    enum Mode {
+        case create
+        case edit(Project)
     }
 
     let id = UUID()
@@ -25,57 +36,148 @@ struct ContentView: View {
 
     @State private var selection: SidebarSelection? = .inbox
     @State private var taskEditorRequest: TaskEditorRequest?
+    @State private var projectEditorRequest: ProjectEditorRequest?
 
     private var activeProjects: [Project] {
         projects.filter { !$0.isArchived }
     }
 
+    private var archivedProjects: [Project] {
+        projects.filter(\.isArchived)
+    }
+
+    private var selectedProject: Project? {
+        guard case let .project(id) = selection else { return nil }
+        return projects.first { $0.id == id }
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                Section("Focus") {
-                    Label("Inbox", systemImage: "tray")
-                        .tag(SidebarSelection.inbox)
-                    Label("Today", systemImage: "sun.max")
-                        .tag(SidebarSelection.today)
+            sidebar
+        } detail: {
+            detail
+        }
+        .navigationSplitViewStyle(.balanced)
+        .sheet(item: $taskEditorRequest) { request in
+            taskEditor(for: request)
+        }
+        .sheet(item: $projectEditorRequest) { request in
+            projectEditor(for: request)
+        }
+        .tint(VibeTheme.accent)
+    }
+
+    private var sidebar: some View {
+        List(selection: $selection) {
+            Section("Focus") {
+                sidebarRow(
+                    title: "Inbox",
+                    systemImage: "tray.fill",
+                    count: inboxTaskCount,
+                    color: .blue
+                )
+                .tag(SidebarSelection.inbox)
+
+                sidebarRow(
+                    title: "Today",
+                    systemImage: "sun.max.fill",
+                    count: todayTaskCount,
+                    color: .orange
+                )
+                .tag(SidebarSelection.today)
+            }
+
+            Section("Projects") {
+                ForEach(activeProjects) { project in
+                    ProjectSidebarRow(
+                        project: project,
+                        taskCount: taskCount(for: project)
+                    )
+                    .tag(SidebarSelection.project(project.id))
                 }
 
-                Section("Projects") {
-                    ForEach(activeProjects) { project in
-                        Label(project.name, systemImage: "folder")
-                            .tag(SidebarSelection.project(project.id))
-                    }
+                Button(action: presentNewProject) {
+                    Label("New Project", systemImage: "plus")
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
             }
-            .navigationTitle("VibePM")
-            .toolbar {
-                Button(action: addProject) {
-                    Label("New Project", systemImage: "folder.badge.plus")
-                }
+
+            Section {
+                sidebarRow(
+                    title: "Archive",
+                    systemImage: "archivebox.fill",
+                    count: archivedProjects.count,
+                    color: .secondary
+                )
+                .tag(SidebarSelection.archive)
             }
-        } detail: {
+        }
+        .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 300)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            BrandHeader()
+            Divider()
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if selection == .archive {
+            ProjectArchiveView(
+                projects: archivedProjects,
+                taskCount: taskCount,
+                onRestore: restoreProject
+            )
+        } else {
             TaskCollectionView(
                 title: detailTitle,
+                subtitle: detailSubtitle,
+                accent: detailAccent,
                 tasks: filteredTasks,
                 onAdd: presentNewTask,
                 onEdit: presentTaskEditor,
-                onToggleCompletion: toggleCompletion
+                onToggleCompletion: toggleCompletion,
+                onEditProject: selectedProject.map { project in
+                    { presentProjectEditor(project) }
+                },
+                onArchiveProject: selectedProject.map { project in
+                    { archiveProject(project) }
+                }
             )
-        }
-        .sheet(item: $taskEditorRequest) { request in
-            taskEditor(for: request)
         }
     }
 
     private var detailTitle: String {
         switch selection {
         case .inbox, .none:
-            return "Inbox"
+            "Inbox"
         case .today:
-            return "Today"
+            "Today"
         case let .project(id):
-            return projects.first(where: { $0.id == id })?.name ?? "Project"
+            projects.first(where: { $0.id == id })?.name ?? "Project"
+        case .archive:
+            "Archive"
         }
+    }
+
+    private var detailSubtitle: String {
+        switch selection {
+        case .inbox, .none:
+            "Capture now. Organize when you are ready."
+        case .today:
+            "A calm view of what needs your attention."
+        case .project:
+            selectedProject?.projectDescription.isEmpty == false
+                ? selectedProject?.projectDescription ?? ""
+                : "Move this Project toward its outcome."
+        case .archive:
+            ""
+        }
+    }
+
+    private var detailAccent: Color {
+        selectedProject?.accent.color ?? VibeTheme.accent
     }
 
     private var filteredTasks: [ProjectTask] {
@@ -91,13 +193,84 @@ struct ContentView: View {
             }
         case let .project(id):
             return tasks.filter { $0.projectID == id && $0.parentTaskID == nil }
+        case .archive:
+            return []
         }
     }
 
-    private func addProject() {
-        let project = Project(name: "New Project")
-        modelContext.insert(project)
+    private var inboxTaskCount: Int {
+        tasks.count { $0.projectID == nil && $0.parentTaskID == nil && $0.status != .done }
+    }
+
+    private var todayTaskCount: Int {
+        let calendar = Calendar.current
+        return tasks.count { task in
+            guard task.status != .done else { return false }
+            return task.scheduledFor.map(calendar.isDateInToday) == true
+                || task.dueAt.map(calendar.isDateInToday) == true
+        }
+    }
+
+    private func taskCount(for project: Project) -> Int {
+        tasks.count { $0.projectID == project.id && $0.status != .done }
+    }
+
+    private func sidebarRow(
+        title: String,
+        systemImage: String,
+        count: Int,
+        color: Color
+    ) -> some View {
+        HStack {
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: systemImage)
+                    .foregroundStyle(color)
+            }
+            Spacer()
+            CountBadge(count: count)
+        }
+    }
+
+    private func presentNewProject() {
+        projectEditorRequest = ProjectEditorRequest(mode: .create)
+    }
+
+    private func presentProjectEditor(_ project: Project) {
+        projectEditorRequest = ProjectEditorRequest(mode: .edit(project))
+    }
+
+    private func archiveProject(_ project: Project) {
+        project.archive()
+        selection = .inbox
+    }
+
+    private func restoreProject(_ project: Project) {
+        project.restore()
         selection = .project(project.id)
+    }
+
+    @ViewBuilder
+    private func projectEditor(for request: ProjectEditorRequest) -> some View {
+        switch request.mode {
+        case .create:
+            ProjectEditorView(
+                heading: "New Project",
+                draft: ProjectDraft()
+            ) { draft in
+                let project = draft.makeProject()
+                modelContext.insert(project)
+                selection = .project(project.id)
+            }
+        case let .edit(project):
+            ProjectEditorView(
+                heading: "Edit Project",
+                draft: ProjectDraft(project: project)
+            ) { draft in
+                draft.apply(to: project)
+            }
+        }
     }
 
     private func presentNewTask() {
@@ -150,6 +323,52 @@ struct ContentView: View {
             task.reopen()
         } else {
             task.markDone()
+        }
+    }
+}
+
+private struct BrandHeader: View {
+    var body: some View {
+        HStack(spacing: 11) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(VibeTheme.brandGradient)
+                .frame(width: 38, height: 38)
+                .overlay {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: VibeTheme.accent.opacity(0.24), radius: 8, y: 3)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("VibePM")
+                    .font(.headline)
+                Text("Make progress feel lighter")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct ProjectSidebarRow: View {
+    let project: Project
+    let taskCount: Int
+
+    var body: some View {
+        HStack {
+            Circle()
+                .fill(project.accent.color.gradient)
+                .frame(width: 10, height: 10)
+                .shadow(color: project.accent.color.opacity(0.25), radius: 3)
+            Text(project.name)
+                .lineLimit(1)
+            Spacer()
+            CountBadge(count: taskCount)
         }
     }
 }
