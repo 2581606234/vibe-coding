@@ -37,6 +37,10 @@ struct ContentView: View {
     @State private var selection: SidebarSelection? = .inbox
     @State private var taskEditorRequest: TaskEditorRequest?
     @State private var projectEditorRequest: ProjectEditorRequest?
+    @State private var searchText = ""
+    @State private var priorityFilter: TaskPriority?
+    @State private var statusFilter: TaskStatus?
+    @State private var taskViewMode: TaskViewMode = .list
 
     private var activeProjects: [Project] {
         projects.filter { !$0.isArchived }
@@ -64,6 +68,7 @@ struct ContentView: View {
         .sheet(item: $projectEditorRequest) { request in
             projectEditor(for: request)
         }
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search Tasks")
         .tint(VibeTheme.accent)
     }
 
@@ -135,9 +140,14 @@ struct ContentView: View {
                 subtitle: detailSubtitle,
                 accent: detailAccent,
                 tasks: filteredTasks,
+                supportsBoard: selectedProject != nil,
+                viewMode: $taskViewMode,
+                priorityFilter: $priorityFilter,
+                statusFilter: $statusFilter,
                 onAdd: presentNewTask,
                 onEdit: presentTaskEditor,
                 onToggleCompletion: toggleCompletion,
+                onMove: moveTask,
                 onEditProject: selectedProject.map { project in
                     { presentProjectEditor(project) }
                 },
@@ -181,21 +191,30 @@ struct ContentView: View {
     }
 
     private var filteredTasks: [ProjectTask] {
+        let scopedTasks: [ProjectTask]
+
         switch selection {
         case .inbox, .none:
-            return tasks.filter { $0.projectID == nil && $0.parentTaskID == nil }
+            scopedTasks = tasks.filter { $0.projectID == nil }
         case .today:
             let calendar = Calendar.current
-            return tasks.filter { task in
+            scopedTasks = tasks.filter { task in
                 guard task.status != .done else { return false }
                 return task.scheduledFor.map(calendar.isDateInToday) == true
                     || task.dueAt.map(calendar.isDateInToday) == true
             }
         case let .project(id):
-            return tasks.filter { $0.projectID == id && $0.parentTaskID == nil }
+            scopedTasks = tasks.filter { $0.projectID == id }
         case .archive:
             return []
         }
+
+        let filter = TaskFilter(
+            searchText: searchText,
+            priority: priorityFilter,
+            status: statusFilter
+        )
+        return filter.isActive ? scopedTasks.filter(filter.matches) : scopedTasks
     }
 
     private var inboxTaskCount: Int {
@@ -303,19 +322,36 @@ struct ContentView: View {
                     projectID: projectID,
                     scheduledFor: scheduledFor
                 ),
-                projects: activeProjects
+                projects: activeProjects,
+                parentTasks: parentTaskCandidates()
             ) { draft in
-                modelContext.insert(draft.makeTask())
+                modelContext.insert(normalizedHierarchy(draft).makeTask())
             }
         case let .edit(task):
             TaskEditorView(
                 heading: "Edit Task",
                 draft: TaskDraft(task: task),
-                projects: activeProjects
+                projects: activeProjects,
+                parentTasks: parentTaskCandidates(excluding: task.id)
             ) { draft in
-                draft.apply(to: task)
+                normalizedHierarchy(draft).apply(to: task)
             }
         }
+    }
+
+    private func parentTaskCandidates(excluding taskID: UUID? = nil) -> [ProjectTask] {
+        tasks.filter { task in
+            task.parentTaskID == nil && task.id != taskID
+        }
+    }
+
+    private func normalizedHierarchy(_ draft: TaskDraft) -> TaskDraft {
+        var draft = draft
+        if let parentTaskID = draft.parentTaskID,
+           let parent = tasks.first(where: { $0.id == parentTaskID }) {
+            draft.projectID = parent.projectID
+        }
+        return draft
     }
 
     private func toggleCompletion(_ task: ProjectTask) {
@@ -324,6 +360,10 @@ struct ContentView: View {
         } else {
             task.markDone()
         }
+    }
+
+    private func moveTask(_ task: ProjectTask, to status: TaskStatus) {
+        task.move(to: status)
     }
 }
 

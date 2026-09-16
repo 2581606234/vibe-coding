@@ -6,11 +6,28 @@ struct TaskCollectionView: View {
     let subtitle: String
     let accent: Color
     let tasks: [ProjectTask]
+    let supportsBoard: Bool
+    @Binding var viewMode: TaskViewMode
+    @Binding var priorityFilter: TaskPriority?
+    @Binding var statusFilter: TaskStatus?
     let onAdd: () -> Void
     let onEdit: (ProjectTask) -> Void
     let onToggleCompletion: (ProjectTask) -> Void
+    let onMove: (ProjectTask, TaskStatus) -> Void
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
+
+    private var parentTasks: [ProjectTask] {
+        tasks.filter { $0.parentTaskID == nil }
+    }
+
+    private var orphanSubtasks: [ProjectTask] {
+        let visibleParentIDs = Set(parentTasks.map(\.id))
+        return tasks.filter { task in
+            guard let parentTaskID = task.parentTaskID else { return false }
+            return !visibleParentIDs.contains(parentTaskID)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -18,21 +35,15 @@ struct TaskCollectionView: View {
 
             if tasks.isEmpty {
                 emptyState
+            } else if supportsBoard && viewMode == .board {
+                TaskBoardView(
+                    tasks: tasks,
+                    accent: accent,
+                    onEdit: onEdit,
+                    onMove: onMove
+                )
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(tasks) { task in
-                            TaskRowView(
-                                task: task,
-                                accent: accent,
-                                onEdit: { onEdit(task) },
-                                onToggleCompletion: { onToggleCompletion(task) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 28)
-                }
+                taskList
             }
         }
         .background(VibeTheme.canvas)
@@ -58,32 +69,129 @@ struct TaskCollectionView: View {
     }
 
     private var collectionHeader: some View {
-        HStack(alignment: .top, spacing: 14) {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(accent.gradient)
-                .frame(width: 48, height: 48)
-                .overlay {
-                    Image(systemName: title == "Today" ? "sun.max.fill" : "checklist")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                }
-                .shadow(color: accent.opacity(0.24), radius: 8, y: 4)
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(alignment: .top, spacing: 14) {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(accent.gradient)
+                    .frame(width: 48, height: 48)
+                    .overlay {
+                        Image(systemName: title == "Today" ? "sun.max.fill" : "checklist")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .shadow(color: accent.opacity(0.24), radius: 8, y: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 9) {
-                    Text(title)
-                        .font(.largeTitle.bold())
-                    CountBadge(count: tasks.count)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 9) {
+                        Text(title)
+                            .font(.largeTitle.bold())
+                        CountBadge(count: tasks.count)
+                    }
+                    Text(subtitle)
+                        .foregroundStyle(.secondary)
                 }
-                Text(subtitle)
-                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if supportsBoard {
+                    Picker("View", selection: $viewMode) {
+                        ForEach(TaskViewMode.allCases, id: \.self) { mode in
+                            Label(mode.title, systemImage: mode.systemImage).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                    .labelsHidden()
+                }
             }
 
-            Spacer()
+            HStack(spacing: 10) {
+                filterMenu
+                if priorityFilter != nil || statusFilter != nil {
+                    Button("Clear Filters", systemImage: "xmark.circle") {
+                        priorityFilter = nil
+                        statusFilter = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.horizontal, 28)
         .padding(.top, 24)
         .padding(.bottom, 20)
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("Priority", selection: $priorityFilter) {
+                Text("Any Priority").tag(TaskPriority?.none)
+                ForEach(TaskPriority.allCases.filter { $0 != .none }, id: \.self) { priority in
+                    Text(priority.title).tag(Optional(priority))
+                }
+            }
+
+            Picker("Status", selection: $statusFilter) {
+                Text("Any Status").tag(TaskStatus?.none)
+                ForEach(TaskStatus.allCases, id: \.self) { status in
+                    Text(status.title).tag(Optional(status))
+                }
+            }
+        } label: {
+            Label(
+                priorityFilter == nil && statusFilter == nil ? "Filter" : "Filtered",
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var taskList: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(parentTasks) { task in
+                    TaskRowView(
+                        task: task,
+                        accent: accent,
+                        isSubtask: false,
+                        onEdit: { onEdit(task) },
+                        onToggleCompletion: { onToggleCompletion(task) },
+                        onMove: { onMove(task, $0) }
+                    )
+
+                    ForEach(subtasks(for: task)) { subtask in
+                        TaskRowView(
+                            task: subtask,
+                            accent: accent,
+                            isSubtask: true,
+                            onEdit: { onEdit(subtask) },
+                            onToggleCompletion: { onToggleCompletion(subtask) },
+                            onMove: { onMove(subtask, $0) }
+                        )
+                        .padding(.leading, 30)
+                    }
+                }
+
+                ForEach(orphanSubtasks) { subtask in
+                    TaskRowView(
+                        task: subtask,
+                        accent: accent,
+                        isSubtask: true,
+                        onEdit: { onEdit(subtask) },
+                        onToggleCompletion: { onToggleCompletion(subtask) },
+                        onMove: { onMove(subtask, $0) }
+                    )
+                    .padding(.leading, 30)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 28)
+        }
+    }
+
+    private func subtasks(for task: ProjectTask) -> [ProjectTask] {
+        tasks.filter { $0.parentTaskID == task.id }
     }
 
     private var emptyState: some View {
@@ -116,13 +224,22 @@ struct TaskCollectionView: View {
 private struct TaskRowView: View {
     let task: ProjectTask
     let accent: Color
+    let isSubtask: Bool
     let onEdit: () -> Void
     let onToggleCompletion: () -> Void
+    let onMove: (TaskStatus) -> Void
 
     @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 13) {
+            if isSubtask {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Subtask")
+            }
+
             Button(action: onToggleCompletion) {
                 Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
@@ -150,6 +267,24 @@ private struct TaskRowView: View {
             .onTapGesture(perform: onEdit)
 
             Spacer(minLength: 12)
+
+            Menu {
+                ForEach(TaskStatus.allCases, id: \.self) { status in
+                    Button(status.title) {
+                        onMove(status)
+                    }
+                    .disabled(status == task.status)
+                }
+            } label: {
+                Text(task.status.title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(task.status == .done ? .green : accent)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background((task.status == .done ? Color.green : accent).opacity(0.09), in: Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
 
             if isHovering {
                 Button(action: onEdit) {

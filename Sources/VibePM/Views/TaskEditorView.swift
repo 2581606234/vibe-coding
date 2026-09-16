@@ -6,6 +6,7 @@ struct TaskEditorView: View {
 
     let heading: String
     let projects: [Project]
+    let parentTasks: [ProjectTask]
     let onSave: (TaskDraft) -> Void
 
     @State private var draft: TaskDraft
@@ -14,10 +15,12 @@ struct TaskEditorView: View {
         heading: String,
         draft: TaskDraft,
         projects: [Project],
+        parentTasks: [ProjectTask],
         onSave: @escaping (TaskDraft) -> Void
     ) {
         self.heading = heading
         self.projects = projects
+        self.parentTasks = parentTasks
         self.onSave = onSave
         _draft = State(initialValue: draft)
     }
@@ -37,6 +40,12 @@ struct TaskEditorView: View {
                 }
 
                 Section("Organization") {
+                    Picker("Status", selection: $draft.status) {
+                        ForEach(TaskStatus.allCases, id: \.self) { status in
+                            Text(status.title).tag(status)
+                        }
+                    }
+
                     Picker("Priority", selection: $draft.priority) {
                         ForEach(TaskPriority.allCases, id: \.self) { priority in
                             Label(priority.title, systemImage: "flag.fill")
@@ -50,6 +59,13 @@ struct TaskEditorView: View {
                         ForEach(projects) { project in
                             Label(project.name, systemImage: "folder.fill")
                                 .tag(Optional(project.id))
+                        }
+                    }
+
+                    Picker("Parent Task", selection: $draft.parentTaskID) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(eligibleParentTasks) { task in
+                            Text(task.title).tag(Optional(task.id))
                         }
                     }
                 }
@@ -72,6 +88,16 @@ struct TaskEditorView: View {
             editorActions
         }
         .frame(width: 520, height: 560)
+        .onChange(of: draft.projectID) {
+            if let parentTaskID = draft.parentTaskID,
+               !eligibleParentTasks.contains(where: { $0.id == parentTaskID }) {
+                draft.parentTaskID = nil
+            }
+        }
+    }
+
+    private var eligibleParentTasks: [ProjectTask] {
+        parentTasks.filter { $0.projectID == draft.projectID }
     }
 
     private var editorHeader: some View {

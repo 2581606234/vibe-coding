@@ -95,5 +95,11 @@ public final class ProjectTask {
         completedAt = nil
         updatedAt = date
     }
+
+    public func move(to newStatus: TaskStatus, at date: Date = .now) {
+        status = newStatus
+        completedAt = newStatus == .done ? date : nil
+        updatedAt = date
+    }
 }
 

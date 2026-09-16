@@ -102,4 +102,49 @@ struct ProjectTaskTests {
         #expect(persistedTasks.first?.title == "Persist me")
         #expect(persistedTasks.first?.priority == .high)
     }
+
+    @Test
+    func movingTaskUpdatesCompletionState() {
+        let movedAt = Date(timeIntervalSince1970: 1_700_020_000)
+        let task = ProjectTask(title: "Move me")
+
+        task.move(to: .done, at: movedAt)
+        #expect(task.status == .done)
+        #expect(task.completedAt == movedAt)
+
+        task.move(to: .inProgress, at: movedAt.addingTimeInterval(1))
+        #expect(task.status == .inProgress)
+        #expect(task.completedAt == nil)
+    }
+
+    @Test
+    func taskFilterComposesSearchPriorityAndStatus() {
+        let task = ProjectTask(
+            title: "Prepare release notes",
+            taskDescription: "Summarize the latest changes",
+            status: .inProgress,
+            priority: .high
+        )
+
+        #expect(TaskFilter(searchText: "release").matches(task))
+        #expect(TaskFilter(searchText: "LATEST").matches(task))
+        #expect(TaskFilter(priority: .high, status: .inProgress).matches(task))
+        #expect(!TaskFilter(priority: .low).matches(task))
+        #expect(!TaskFilter(searchText: "invoice").matches(task))
+    }
+
+    @Test
+    func taskDraftPreservesHierarchyAndStatus() {
+        let parentID = UUID()
+        let draft = TaskDraft(
+            title: "Review screenshots",
+            status: .inProgress,
+            parentTaskID: parentID
+        )
+
+        let task = draft.makeTask()
+
+        #expect(task.status == .inProgress)
+        #expect(task.parentTaskID == parentID)
+    }
 }
