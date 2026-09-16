@@ -5,6 +5,7 @@ struct TaskCollectionView: View {
     let title: String
     let tasks: [ProjectTask]
     let onAdd: () -> Void
+    let onEdit: (ProjectTask) -> Void
     let onToggleCompletion: (ProjectTask) -> Void
 
     var body: some View {
@@ -27,14 +28,22 @@ struct TaskCollectionView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(task.status == .done ? "Reopen Task" : "Complete Task")
 
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(task.title)
                                 .strikethrough(task.status == .done)
-                            if task.priority != .none {
-                                Text(task.priority.title)
+
+                            if !task.taskDescription.isEmpty {
+                                Text(task.taskDescription)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
+
+                            TaskMetadataView(task: task)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onEdit(task)
                         }
                     }
                 }
@@ -50,3 +59,24 @@ struct TaskCollectionView: View {
     }
 }
 
+private struct TaskMetadataView: View {
+    let task: ProjectTask
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if task.priority != .none {
+                Label(task.priority.title, systemImage: "flag.fill")
+            }
+
+            if let scheduledFor = task.scheduledFor {
+                Label(scheduledFor.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
+            }
+
+            if let dueAt = task.dueAt {
+                Label(dueAt.formatted(date: .abbreviated, time: .omitted), systemImage: "clock")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}

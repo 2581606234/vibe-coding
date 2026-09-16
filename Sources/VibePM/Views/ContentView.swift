@@ -8,12 +8,23 @@ private enum SidebarSelection: Hashable {
     case project(UUID)
 }
 
+private struct TaskEditorRequest: Identifiable {
+    enum Mode {
+        case create(projectID: UUID?, scheduledFor: Date?)
+        case edit(ProjectTask)
+    }
+
+    let id = UUID()
+    let mode: Mode
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.createdAt) private var projects: [Project]
     @Query(sort: \ProjectTask.createdAt, order: .reverse) private var tasks: [ProjectTask]
 
     @State private var selection: SidebarSelection? = .inbox
+    @State private var taskEditorRequest: TaskEditorRequest?
 
     private var activeProjects: [Project] {
         projects.filter { !$0.isArchived }
@@ -46,9 +57,13 @@ struct ContentView: View {
             TaskCollectionView(
                 title: detailTitle,
                 tasks: filteredTasks,
-                onAdd: addTask,
+                onAdd: presentNewTask,
+                onEdit: presentTaskEditor,
                 onToggleCompletion: toggleCompletion
             )
+        }
+        .sheet(item: $taskEditorRequest) { request in
+            taskEditor(for: request)
         }
     }
 
@@ -85,7 +100,7 @@ struct ContentView: View {
         selection = .project(project.id)
     }
 
-    private func addTask() {
+    private func presentNewTask() {
         let projectID: UUID?
         if case let .project(id) = selection {
             projectID = id
@@ -93,11 +108,41 @@ struct ContentView: View {
             projectID = nil
         }
 
-        let task = ProjectTask(title: "New Task", projectID: projectID)
-        if selection == .today {
-            task.scheduledFor = .now
+        taskEditorRequest = TaskEditorRequest(
+            mode: .create(
+                projectID: projectID,
+                scheduledFor: selection == .today ? .now : nil
+            )
+        )
+    }
+
+    private func presentTaskEditor(_ task: ProjectTask) {
+        taskEditorRequest = TaskEditorRequest(mode: .edit(task))
+    }
+
+    @ViewBuilder
+    private func taskEditor(for request: TaskEditorRequest) -> some View {
+        switch request.mode {
+        case let .create(projectID, scheduledFor):
+            TaskEditorView(
+                heading: "New Task",
+                draft: TaskDraft(
+                    projectID: projectID,
+                    scheduledFor: scheduledFor
+                ),
+                projects: activeProjects
+            ) { draft in
+                modelContext.insert(draft.makeTask())
+            }
+        case let .edit(task):
+            TaskEditorView(
+                heading: "Edit Task",
+                draft: TaskDraft(task: task),
+                projects: activeProjects
+            ) { draft in
+                draft.apply(to: task)
+            }
         }
-        modelContext.insert(task)
     }
 
     private func toggleCompletion(_ task: ProjectTask) {
@@ -108,4 +153,3 @@ struct ContentView: View {
         }
     }
 }
-
