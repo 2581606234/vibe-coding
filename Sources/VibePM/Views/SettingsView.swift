@@ -205,8 +205,11 @@ struct SettingsView: View {
 
     private func exportTemplate() {
         do {
-            exportDocument = SpreadsheetDocument(data: try VibePMExcelWorkbook.templateData())
-            exportFilename = "VibePM-Import-Template"
+            let language = AppLanguage(rawValue: appLanguageRawValue) ?? .system
+            exportDocument = SpreadsheetDocument(data: try VibePMExcelWorkbook.templateData(language: language))
+            exportFilename = language.resolved() == .simplifiedChinese
+                ? "VibePM-导入模板"
+                : "VibePM-Import-Template"
             exportSuccessMessage = L10n.text("Excel import template saved successfully.")
             isExporting = true
         } catch {

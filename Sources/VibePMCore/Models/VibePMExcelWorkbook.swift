@@ -18,32 +18,34 @@ public struct VibePMExcelWorkbook: Sendable {
     }
 
     public func encoded() throws -> Data {
-        try ExcelArchive.make(
+        return try ExcelArchive.make(
             projectRows: projects.map(Self.projectRow),
             taskRows: tasks.map(Self.taskRow),
-            includeExamples: false
+            templateLanguage: nil
         )
     }
 
-    public static func templateData() throws -> Data {
-        try ExcelArchive.make(
+    public static func templateData(language: AppLanguage = L10n.selectedLanguage()) throws -> Data {
+        let language = language.resolved()
+        let isChinese = language == .simplifiedChinese
+        return try ExcelArchive.make(
             projectRows: [[
-                .text("project-example"),
-                .text("Website launch"),
-                .text("Prepare and publish the new website"),
-                .text("indigo"),
-                .bool(false),
+                .text(isChinese ? "项目-网站上线" : "project-website-launch"),
+                .text(isChinese ? "网站上线" : "Website launch"),
+                .text(isChinese ? "准备并发布新网站" : "Prepare and publish the new website"),
+                .text(isChinese ? "靛蓝" : "indigo"),
+                .text(isChinese ? "否" : "FALSE"),
                 .blank,
                 .blank
             ]],
             taskRows: [
                 [
-                    .text("task-parent-example"),
-                    .text("Launch website"),
-                    .text("Coordinate the final launch"),
-                    .text("inProgress"),
-                    .text("high"),
-                    .text("project-example"),
+                    .text(isChinese ? "任务-网站上线" : "task-website-launch"),
+                    .text(isChinese ? "发布网站" : "Launch website"),
+                    .text(isChinese ? "协调最终上线工作" : "Coordinate the final launch"),
+                    .text(isChinese ? "进行中" : "inProgress"),
+                    .text(isChinese ? "高" : "high"),
+                    .text(isChinese ? "项目-网站上线" : "project-website-launch"),
                     .blank,
                     .date(.now),
                     .date(Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now),
@@ -52,13 +54,13 @@ public struct VibePMExcelWorkbook: Sendable {
                     .blank
                 ],
                 [
-                    .text("task-child-example"),
-                    .text("Review homepage copy"),
+                    .text(isChinese ? "任务-首页文案评审" : "task-review-homepage-copy"),
+                    .text(isChinese ? "评审首页文案" : "Review homepage copy"),
                     .text(""),
-                    .text("todo"),
-                    .text("medium"),
-                    .text("project-example"),
-                    .text("task-parent-example"),
+                    .text(isChinese ? "待办" : "todo"),
+                    .text(isChinese ? "中" : "medium"),
+                    .text(isChinese ? "项目-网站上线" : "project-website-launch"),
+                    .text(isChinese ? "任务-网站上线" : "task-website-launch"),
                     .date(.now),
                     .date(Calendar.current.date(byAdding: .day, value: 2, to: .now) ?? .now),
                     .blank,
@@ -66,7 +68,7 @@ public struct VibePMExcelWorkbook: Sendable {
                     .blank
                 ]
             ],
-            includeExamples: true
+            templateLanguage: language
         )
     }
 
@@ -328,23 +330,180 @@ private enum ExcelArchive {
         "completed_at", "created_at", "updated_at"
     ]
 
+    private struct ExcelValidation {
+        enum Source {
+            case values([String])
+            case namedRange(String)
+        }
+
+        let range: String
+        let source: Source
+        let promptTitle: String
+        let prompt: String
+        let errorTitle: String
+        let error: String
+    }
+
+    private struct TemplateLayout {
+        let isTemplate: Bool
+        let isChinese: Bool
+
+        init(language: AppLanguage?) {
+            isTemplate = language != nil
+            isChinese = language?.resolved() == .simplifiedChinese
+        }
+
+        var projectSheet: String { isChinese ? "项目" : "Projects" }
+        var taskSheet: String { isChinese ? "任务" : "Tasks" }
+        var instructionSheet: String { isChinese ? "填写说明" : "Instructions" }
+        var guideTitle: String { isChinese ? "VibePM Excel 导入模板说明" : "VibePM Excel Import Guide" }
+
+        var projectHeaders: [String] {
+            guard isChinese else { return ExcelArchive.projectHeaders }
+            return [
+                "项目键", "项目名称", "项目描述", "主题色", "是否归档", "创建时间", "更新时间"
+            ]
+        }
+
+        var taskHeaders: [String] {
+            guard isChinese else { return ExcelArchive.taskHeaders }
+            return [
+                "任务键", "任务标题", "任务描述", "状态", "优先级", "所属项目", "父任务",
+                "安排日期", "截止日期", "完成时间", "创建时间", "更新时间"
+            ]
+        }
+
+        var projectValidations: [ExcelValidation] {
+            guard isTemplate else { return [] }
+            let title = isChinese ? "请选择" : "Choose a value"
+            let prompt = isChinese ? "请从下拉列表中选择。" : "Choose from the drop-down list."
+            let errorTitle = isChinese ? "值无效" : "Invalid value"
+            let error = isChinese ? "请选择列表中的值。" : "Choose a value from the list."
+            return [
+                ExcelValidation(
+                    range: "D2:D1001",
+                    source: .values(isChinese
+                        ? ["靛蓝", "蓝色", "薄荷绿", "橙色", "玫红", "紫色"]
+                        : ["indigo", "blue", "mint", "orange", "rose", "purple"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "E2:E1001",
+                    source: .values(isChinese ? ["是", "否"] : ["TRUE", "FALSE"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                )
+            ]
+        }
+
+        var taskValidations: [ExcelValidation] {
+            guard isTemplate else { return [] }
+            let title = isChinese ? "请选择" : "Choose a value"
+            let prompt = isChinese ? "请从下拉列表中选择。" : "Choose from the drop-down list."
+            let referencePrompt = isChinese
+                ? "请从已填写的键中选择；留空表示不关联。"
+                : "Choose an existing key; leave blank for no relationship."
+            let errorTitle = isChinese ? "值无效" : "Invalid value"
+            let error = isChinese ? "请选择列表中的值。" : "Choose a value from the list."
+            return [
+                ExcelValidation(
+                    range: "D2:D2001",
+                    source: .values(isChinese ? ["待办", "进行中", "已完成"] : ["todo", "inProgress", "done"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "E2:E2001",
+                    source: .values(isChinese ? ["无", "低", "中", "高"] : ["none", "low", "medium", "high"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "F2:F2001",
+                    source: .namedRange("ProjectKeys"),
+                    promptTitle: isChinese ? "选择项目" : "Choose a Project",
+                    prompt: referencePrompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "G2:G2001",
+                    source: .namedRange("TaskKeys"),
+                    promptTitle: isChinese ? "选择父任务" : "Choose a Parent Task",
+                    prompt: referencePrompt, errorTitle: errorTitle, error: error
+                )
+            ]
+        }
+
+        var instructionRows: [[ExcelCell]] {
+            if isChinese {
+                return [
+                    [.text("工作表"), .text("字段"), .text("说明"), .text("可用值或填写方式")],
+                    [.text("项目"), .text("project_key"), .text("项目唯一键，供任务引用；必填且不可重复"), .text("建议使用容易识别的文本")],
+                    [.text("项目"), .text("name"), .text("项目名称；必填"), .text("文本")],
+                    [.text("项目"), .text("description"), .text("项目描述"), .text("文本，可留空")],
+                    [.text("项目"), .text("accent"), .text("项目主题色；单元格提供下拉选择"), .text("靛蓝、蓝色、薄荷绿、橙色、玫红、紫色")],
+                    [.text("项目"), .text("archived"), .text("是否归档；单元格提供下拉选择"), .text("是、否")],
+                    [.text("任务"), .text("task_key"), .text("任务唯一键；父任务通过该键引用；必填且不可重复"), .text("建议使用容易识别的文本")],
+                    [.text("任务"), .text("title"), .text("任务标题；必填"), .text("文本")],
+                    [.text("任务"), .text("description"), .text("任务描述"), .text("文本，可留空")],
+                    [.text("任务"), .text("status"), .text("任务状态；单元格提供下拉选择"), .text("待办、进行中、已完成")],
+                    [.text("任务"), .text("priority"), .text("任务优先级；单元格提供下拉选择"), .text("无、低、中、高")],
+                    [.text("任务"), .text("project_key"), .text("所属项目；从项目键下拉列表选择，留空表示收件箱"), .text("项目工作表中的 project_key")],
+                    [.text("任务"), .text("parent_task_key"), .text("父任务；从任务键下拉列表选择，留空表示顶级任务"), .text("任务工作表中的 task_key")],
+                    [.text("任务"), .text("scheduled_for"), .text("安排日期"), .text("Excel 日期或 yyyy-MM-dd")],
+                    [.text("任务"), .text("due_at"), .text("截止日期"), .text("Excel 日期或 yyyy-MM-dd")],
+                    [.text("任务"), .text("completed_at"), .text("完成时间；通常可留空，已完成任务会自动补全"), .text("日期时间，可留空")],
+                    [.text("全部"), .text("created_at, updated_at"), .text("创建和更新时间；导入模板中可以留空"), .text("日期时间，可留空")],
+                    [.text("说明"), .text("导入规则"), .text("相同键更新现有记录，其他本地数据不会被删除"), .text("模板已经包含父任务和子任务示例")]
+                ]
+            }
+            return [
+                [.text("Sheet"), .text("Field"), .text("Description"), .text("Allowed values or input")],
+                [.text("Projects"), .text("project_key"), .text("Unique Project key used by Tasks; required and unique"), .text("Readable text is recommended")],
+                [.text("Projects"), .text("name"), .text("Project name; required"), .text("Text")],
+                [.text("Projects"), .text("description"), .text("Project description"), .text("Text; optional")],
+                [.text("Projects"), .text("accent"), .text("Project color; use the cell drop-down"), .text("indigo, blue, mint, orange, rose, purple")],
+                [.text("Projects"), .text("archived"), .text("Archive state; use the cell drop-down"), .text("TRUE, FALSE")],
+                [.text("Tasks"), .text("task_key"), .text("Unique Task key referenced by Subtasks; required and unique"), .text("Readable text is recommended")],
+                [.text("Tasks"), .text("title"), .text("Task title; required"), .text("Text")],
+                [.text("Tasks"), .text("description"), .text("Task description"), .text("Text; optional")],
+                [.text("Tasks"), .text("status"), .text("Task status; use the cell drop-down"), .text("todo, inProgress, done")],
+                [.text("Tasks"), .text("priority"), .text("Task priority; use the cell drop-down"), .text("none, low, medium, high")],
+                [.text("Tasks"), .text("project_key"), .text("Project relationship; choose a Project key or leave blank for Inbox"), .text("project_key from Projects")],
+                [.text("Tasks"), .text("parent_task_key"), .text("Parent Task relationship; choose a Task key or leave blank for a root Task"), .text("task_key from Tasks")],
+                [.text("Tasks"), .text("scheduled_for"), .text("Scheduled date"), .text("Excel date or yyyy-MM-dd")],
+                [.text("Tasks"), .text("due_at"), .text("Due date"), .text("Excel date or yyyy-MM-dd")],
+                [.text("Tasks"), .text("completed_at"), .text("Completion timestamp; usually blank and filled for done Tasks"), .text("Date and time; optional")],
+                [.text("All"), .text("created_at, updated_at"), .text("Audit timestamps; optional in the import template"), .text("Date and time; optional")],
+                [.text("Note"), .text("Import behavior"), .text("Matching keys update records; other local data is kept"), .text("Parent and Subtask examples are included")]
+            ]
+        }
+    }
+
     static func make(
         projectRows: [[ExcelCell]],
         taskRows: [[ExcelCell]],
-        includeExamples: Bool
+        templateLanguage: AppLanguage?
     ) throws -> Data {
+        let layout = TemplateLayout(language: templateLanguage)
         let archive = try Archive(accessMode: .create)
         let files: [(String, String)] = [
             ("[Content_Types].xml", contentTypes),
             ("_rels/.rels", rootRelationships),
             ("docProps/app.xml", appProperties),
             ("docProps/core.xml", coreProperties),
-            ("xl/workbook.xml", workbook),
+            ("xl/workbook.xml", workbook(layout: layout)),
             ("xl/_rels/workbook.xml.rels", workbookRelationships),
             ("xl/styles.xml", styles),
-            ("xl/worksheets/sheet1.xml", worksheet(headers: projectHeaders, rows: projectRows, widths: [24, 24, 42, 14, 12, 20, 20])),
-            ("xl/worksheets/sheet2.xml", worksheet(headers: taskHeaders, rows: taskRows, widths: [24, 28, 42, 16, 14, 24, 24, 16, 16, 20, 20, 20])),
-            ("xl/worksheets/sheet3.xml", instructions(includeExamples: includeExamples))
+            ("xl/worksheets/sheet1.xml", worksheet(
+                headers: layout.projectHeaders,
+                rows: projectRows,
+                widths: [26, 26, 42, 18, 20, 22, 22],
+                validations: layout.projectValidations
+            )),
+            ("xl/worksheets/sheet2.xml", worksheet(
+                headers: layout.taskHeaders,
+                rows: taskRows,
+                widths: [28, 30, 42, 18, 18, 28, 30, 24, 20, 24, 22, 22],
+                validations: layout.taskValidations
+            )),
+            ("xl/worksheets/sheet3.xml", instructions(layout: layout))
         ]
 
         for (path, contents) in files {
@@ -363,7 +522,12 @@ private enum ExcelArchive {
         return data
     }
 
-    private static func worksheet(headers: [String], rows: [[ExcelCell]], widths: [Double]) -> String {
+    private static func worksheet(
+        headers: [String],
+        rows: [[ExcelCell]],
+        widths: [Double],
+        validations: [ExcelValidation] = []
+    ) -> String {
         let columnXML = widths.enumerated().map { index, width in
             "<col min=\"\(index + 1)\" max=\"\(index + 1)\" width=\"\(width)\" customWidth=\"1\"/>"
         }.joined()
@@ -377,6 +541,7 @@ private enum ExcelArchive {
             return "<row r=\"\(rowIndex + 2)\" ht=\"22\" customHeight=\"1\">\(cells)</row>"
         }.joined()
         let lastColumn = columnName(headers.count - 1)
+        let validationXML = dataValidationsXML(validations)
 
         return xmlHeader + """
         <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -385,26 +550,32 @@ private enum ExcelArchive {
           <cols>\(columnXML)</cols>
           <sheetData><row r="1" ht="26" customHeight="1">\(headerXML)</row>\(bodyXML)</sheetData>
           <autoFilter ref="A1:\(lastColumn)\(max(rows.count + 1, 1))"/>
+          \(validationXML)
         </worksheet>
         """
     }
 
-    private static func instructions(includeExamples: Bool) -> String {
-        let rows: [[ExcelCell]] = [
-            [.text("Sheet / 工作表"), .text("Field / 字段"), .text("Description / 说明"), .text("Allowed values / 可用值")],
-            [.text("Projects"), .text("project_key"), .text("Unique stable key; used by Tasks / 唯一稳定键，供任务引用"), .text("Text; UUID is recommended")],
-            [.text("Projects"), .text("accent"), .text("Project color / 项目颜色"), .text("indigo, blue, mint, orange, rose, purple")],
-            [.text("Projects"), .text("archived"), .text("Archive state / 是否归档"), .text("TRUE or FALSE")],
-            [.text("Tasks"), .text("task_key"), .text("Unique stable key / 唯一稳定键"), .text("Text; UUID is recommended")],
-            [.text("Tasks"), .text("status"), .text("Task status / 任务状态"), .text("todo, inProgress, done")],
-            [.text("Tasks"), .text("priority"), .text("Task priority / 任务优先级"), .text("none, low, medium, high")],
-            [.text("Tasks"), .text("project_key"), .text("Project reference; blank means Inbox / 项目引用，留空表示收件箱"), .text("A key from Projects")],
-            [.text("Tasks"), .text("parent_task_key"), .text("Parent Task reference / 父任务引用"), .text("A key from Tasks or blank")],
-            [.text("Tasks"), .text("scheduled_for, due_at"), .text("Excel date values / Excel 日期值"), .text("Date or yyyy-MM-dd")],
-            [.text("All"), .text("*_at"), .text("Audit timestamps; optional in templates / 审计时间，模板中可留空"), .text("Date and time")],
-            [.text("Note"), .text("Import behavior"), .text("Matching keys update; other local data stays / 相同键更新，其他数据保留"), .text(includeExamples ? "Examples included / 已含示例" : "Exported data / 导出数据")]
-        ]
-        return worksheet(headers: ["VibePM Excel Import Guide", "", "", ""], rows: rows, widths: [20, 24, 66, 38])
+    private static func instructions(layout: TemplateLayout) -> String {
+        worksheet(
+            headers: [layout.guideTitle, "", "", ""],
+            rows: layout.instructionRows,
+            widths: [20, 24, 66, 38]
+        )
+    }
+
+    private static func dataValidationsXML(_ validations: [ExcelValidation]) -> String {
+        guard !validations.isEmpty else { return "" }
+        let entries = validations.map { validation in
+            let formula: String
+            switch validation.source {
+            case let .values(values): formula = escape("\"\(values.joined(separator: ","))\"")
+            case let .namedRange(name): formula = escape(name)
+            }
+            return """
+            <dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" errorStyle="stop" sqref="\(validation.range)" promptTitle="\(escape(validation.promptTitle))" prompt="\(escape(validation.prompt))" errorTitle="\(escape(validation.errorTitle))" error="\(escape(validation.error))"><formula1>\(formula)</formula1></dataValidation>
+            """
+        }.joined()
+        return "<dataValidations count=\"\(validations.count)\">\(entries)</dataValidations>"
     }
 
     private static func cellXML(_ cell: ExcelCell, column: Int, row: Int, style: Int?) -> String {
@@ -477,15 +648,32 @@ private enum ExcelArchive {
       <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
     </Relationships>
     """
-    private static let workbook = xmlHeader + """
-    <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-      <sheets>
-        <sheet name="Projects" sheetId="1" r:id="rId1"/>
-        <sheet name="Tasks" sheetId="2" r:id="rId2"/>
-        <sheet name="Instructions" sheetId="3" r:id="rId3"/>
-      </sheets>
-    </workbook>
-    """
+    private static func workbook(layout: TemplateLayout) -> String {
+        let definedNames: String
+        if layout.isTemplate {
+            let projectSheet = layout.projectSheet.replacingOccurrences(of: "'", with: "''")
+            let taskSheet = layout.taskSheet.replacingOccurrences(of: "'", with: "''")
+            definedNames = """
+              <definedNames>
+                <definedName name="ProjectKeys">OFFSET('\(escape(projectSheet))'!$A$2,0,0,MAX(1,COUNTA('\(escape(projectSheet))'!$A:$A)-1),1)</definedName>
+                <definedName name="TaskKeys">OFFSET('\(escape(taskSheet))'!$A$2,0,0,MAX(1,COUNTA('\(escape(taskSheet))'!$A:$A)-1),1)</definedName>
+              </definedNames>
+            """
+        } else {
+            definedNames = ""
+        }
+
+        return xmlHeader + """
+        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets>
+            <sheet name="\(escape(layout.projectSheet))" sheetId="1" r:id="rId1"/>
+            <sheet name="\(escape(layout.taskSheet))" sheetId="2" r:id="rId2"/>
+            <sheet name="\(escape(layout.instructionSheet))" sheetId="3" r:id="rId3"/>
+          </sheets>
+          \(definedNames)
+        </workbook>
+        """
+    }
     private static let workbookRelationships = xmlHeader + """
     <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
       <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
@@ -547,7 +735,21 @@ private extension Archive {
 private extension Array where Element == [String] {
     func records(sheet: String, requiredHeaders: [String]) throws -> [[String: String]] {
         guard let headerRow = first else { throw ExcelWorkbookError.emptyWorksheet(sheet) }
-        let headers = headerRow.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let headers = headerRow.map { header in
+            let trimmed = header.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let aliases = [
+                "项目键": "project_key", "项目名称": "name", "项目描述": "description",
+                "主题色": "accent", "是否归档": "archived", "任务键": "task_key",
+                "任务标题": "title", "任务描述": "description", "状态": "status",
+                "优先级": "priority", "所属项目": "project_key", "所属项目键": "project_key",
+                "父任务": "parent_task_key", "父任务键": "parent_task_key",
+                "安排日期": "scheduled_for", "截止日期": "due_at", "完成时间": "completed_at",
+                "创建时间": "created_at", "更新时间": "updated_at"
+            ]
+            if let alias = aliases[trimmed] { return alias }
+            return trimmed.split(separator: "/", omittingEmptySubsequences: true).last
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? trimmed
+        }
         for requiredHeader in requiredHeaders where !headers.contains(requiredHeader) {
             throw ExcelWorkbookError.missingColumn(sheet: sheet, column: requiredHeader)
         }
