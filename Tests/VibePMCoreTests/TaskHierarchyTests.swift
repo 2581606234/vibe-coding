@@ -59,4 +59,33 @@ struct TaskHierarchyTests {
 
         #expect(ordered.map(\.title) == ["Root", "Child", "Grandchild"])
     }
+
+    @Test("Deletion expands selected parents to all descendants")
+    func deletionIncludesDescendants() {
+        let root = ProjectTask(title: "Root")
+        let child = ProjectTask(title: "Child", parentTaskID: root.id)
+        let grandchild = ProjectTask(title: "Grandchild", parentTaskID: child.id)
+        let unrelated = ProjectTask(title: "Unrelated")
+
+        let deletionIDs = TaskHierarchy.deletionIDs(
+            selectedIDs: [root.id],
+            in: [grandchild, unrelated, child, root]
+        )
+
+        #expect(deletionIDs == [root.id, child.id, grandchild.id])
+        #expect(!deletionIDs.contains(unrelated.id))
+    }
+
+    @Test("Bulk deletion de-duplicates overlapping parent and child selections")
+    func bulkDeletionDeDuplicatesHierarchy() {
+        let parent = ProjectTask(title: "Parent")
+        let child = ProjectTask(title: "Child", parentTaskID: parent.id)
+
+        let deletionIDs = TaskHierarchy.deletionIDs(
+            selectedIDs: [parent.id, child.id],
+            in: [child, parent]
+        )
+
+        #expect(deletionIDs == [parent.id, child.id])
+    }
 }

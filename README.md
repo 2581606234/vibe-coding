@@ -5,7 +5,7 @@ A local-first personal project manager for macOS, built with SwiftUI and SwiftDa
 ## Highlights
 
 - Native macOS list, board, and Gantt workflows
-- Projects, Tasks, Subtasks, priorities, due dates, and local reminders
+- Projects, Tasks, Subtasks, priorities, due dates, local reminders, and confirmed single or bulk deletion
 - Local-first SwiftData persistence with editable Excel import/export and localized templates with field selectors
 - Runtime language switching: Follow System, Simplified Chinese, or English
 

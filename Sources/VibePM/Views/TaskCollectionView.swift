@@ -15,8 +15,15 @@ struct TaskCollectionView: View {
     let onEdit: (ProjectTask) -> Void
     let onToggleCompletion: (ProjectTask) -> Void
     let onMove: (ProjectTask, TaskStatus) -> Void
+    let onDelete: (Set<UUID>) -> Void
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
+
+    @State private var isSelecting = false
+    @State private var selectedTaskIDs: Set<UUID> = []
+    @State private var pendingDeletionIDs: Set<UUID> = []
+    @State private var pendingTaskName: String?
+    @State private var showsDeleteConfirmation = false
 
     private var orderedTasks: [ProjectTask] {
         TaskHierarchy.parentFirst(tasks)
@@ -32,20 +39,38 @@ struct TaskCollectionView: View {
                 TaskBoardView(
                     tasks: tasks,
                     accent: accent,
+                    isSelecting: isSelecting,
+                    selectedTaskIDs: selectedTaskIDs,
+                    onToggleSelection: toggleSelection,
                     onEdit: onEdit,
-                    onMove: onMove
+                    onMove: onMove,
+                    onDelete: requestDelete
                 )
             } else if supportsProjectViews && viewMode == .gantt {
                 GanttView(
                     tasks: tasks,
                     accent: accent,
-                    onEdit: onEdit
+                    isSelecting: isSelecting,
+                    selectedTaskIDs: selectedTaskIDs,
+                    onToggleSelection: toggleSelection,
+                    onEdit: onEdit,
+                    onDelete: requestDelete
                 )
             } else {
                 taskList
             }
         }
         .background(VibeTheme.canvas)
+        .alert(deleteConfirmationTitle, isPresented: $showsDeleteConfirmation) {
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Delete"), role: .destructive, action: confirmDeletion)
+        } message: {
+            Text(deleteConfirmationMessage)
+        }
+        .onChange(of: tasks.map(\.id)) {
+            selectedTaskIDs.formIntersection(Set(tasks.map(\.id)))
+            if tasks.isEmpty { endSelection() }
+        }
         .toolbar {
             ToolbarItemGroup {
                 if let onEditProject, let onArchiveProject {
@@ -55,6 +80,25 @@ struct TaskCollectionView: View {
                     } label: {
                         Label(L10n.text("Project actions"), systemImage: "ellipsis.circle")
                     }
+                }
+
+                if !tasks.isEmpty {
+                    Button(action: toggleSelectionMode) {
+                        Label(
+                            L10n.text(isSelecting ? "Done Selecting" : "Select Tasks"),
+                            systemImage: isSelecting ? "checkmark.circle.fill" : "checkmark.circle"
+                        )
+                    }
+                }
+
+                if isSelecting && !selectedTaskIDs.isEmpty {
+                    Button(role: .destructive, action: requestBulkDelete) {
+                        Label(
+                            L10n.format("Delete %d Tasks", arguments: [selectedTaskIDs.count]),
+                            systemImage: "trash"
+                        )
+                    }
+                    .tint(.red)
                 }
 
                 Button(action: onAdd) {
@@ -114,6 +158,30 @@ struct TaskCollectionView: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                 }
+
+                if isSelecting {
+                    Divider().frame(height: 18)
+                    Text(L10n.format("%d selected", arguments: [selectedTaskIDs.count]))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(selectedTaskIDs.isEmpty ? .secondary : accent)
+
+                    Button(L10n.text(allVisibleTasksSelected ? "Deselect All" : "Select All")) {
+                        if allVisibleTasksSelected {
+                            selectedTaskIDs.removeAll()
+                        } else {
+                            selectedTaskIDs = Set(tasks.map(\.id))
+                        }
+                    }
+                    .buttonStyle(.borderless)
+
+                    if !selectedTaskIDs.isEmpty {
+                        Button(L10n.text("Delete"), systemImage: "trash", role: .destructive) {
+                            requestBulkDelete()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
+                }
             }
         }
         .padding(.horizontal, 28)
@@ -154,9 +222,13 @@ struct TaskCollectionView: View {
                         task: task,
                         accent: accent,
                         isSubtask: task.parentTaskID != nil,
+                        isSelecting: isSelecting,
+                        isSelected: selectedTaskIDs.contains(task.id),
+                        onToggleSelection: { toggleSelection(task) },
                         onEdit: { onEdit(task) },
                         onToggleCompletion: { onToggleCompletion(task) },
-                        onMove: { onMove(task, $0) }
+                        onMove: { onMove(task, $0) },
+                        onDelete: { requestDelete(task) }
                     )
                     .padding(.leading, task.parentTaskID == nil ? 0 : 30)
                 }
@@ -191,15 +263,78 @@ struct TaskCollectionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 60)
     }
+
+    private var allVisibleTasksSelected: Bool {
+        !tasks.isEmpty && Set(tasks.map(\.id)).isSubset(of: selectedTaskIDs)
+    }
+
+    private var deleteConfirmationTitle: String {
+        if let pendingTaskName {
+            return L10n.format("Delete \"%@\"?", arguments: [pendingTaskName])
+        }
+        return L10n.format("Delete %d Tasks?", arguments: [pendingDeletionIDs.count])
+    }
+
+    private var deleteConfirmationMessage: String {
+        if pendingTaskName != nil {
+            return L10n.text("This Task and all of its Subtasks will be permanently deleted. This cannot be undone.")
+        }
+        return L10n.text("The selected Tasks and all of their Subtasks will be permanently deleted. This cannot be undone.")
+    }
+
+    private func toggleSelectionMode() {
+        if isSelecting {
+            endSelection()
+        } else {
+            isSelecting = true
+        }
+    }
+
+    private func endSelection() {
+        isSelecting = false
+        selectedTaskIDs.removeAll()
+    }
+
+    private func toggleSelection(_ task: ProjectTask) {
+        if selectedTaskIDs.contains(task.id) {
+            selectedTaskIDs.remove(task.id)
+        } else {
+            selectedTaskIDs.insert(task.id)
+        }
+    }
+
+    private func requestDelete(_ task: ProjectTask) {
+        pendingDeletionIDs = [task.id]
+        pendingTaskName = task.title
+        showsDeleteConfirmation = true
+    }
+
+    private func requestBulkDelete() {
+        guard !selectedTaskIDs.isEmpty else { return }
+        pendingDeletionIDs = selectedTaskIDs
+        pendingTaskName = nil
+        showsDeleteConfirmation = true
+    }
+
+    private func confirmDeletion() {
+        onDelete(pendingDeletionIDs)
+        pendingDeletionIDs.removeAll()
+        pendingTaskName = nil
+        endSelection()
+    }
 }
 
 private struct TaskRowView: View {
     let task: ProjectTask
     let accent: Color
     let isSubtask: Bool
+    let isSelecting: Bool
+    let isSelected: Bool
+    let onToggleSelection: () -> Void
     let onEdit: () -> Void
     let onToggleCompletion: () -> Void
     let onMove: (TaskStatus) -> Void
+    let onDelete: () -> Void
 
     @State private var isHovering = false
 
@@ -212,13 +347,23 @@ private struct TaskRowView: View {
                     .accessibilityLabel(L10n.text("Subtask"))
             }
 
-            Button(action: onToggleCompletion) {
-                Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(task.status == .done ? accent : .secondary)
+            if isSelecting {
+                Button(action: onToggleSelection) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(isSelected ? accent : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text(isSelected ? "Deselect Task" : "Select Task"))
+            } else {
+                Button(action: onToggleCompletion) {
+                    Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(task.status == .done ? accent : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text(task.status == .done ? "Reopen Task" : "Complete Task"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.text(task.status == .done ? "Reopen Task" : "Complete Task"))
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(task.title)
@@ -236,7 +381,7 @@ private struct TaskRowView: View {
                 TaskMetadataView(task: task)
             }
             .contentShape(Rectangle())
-            .onTapGesture(perform: onEdit)
+            .onTapGesture(perform: isSelecting ? onToggleSelection : onEdit)
 
             Spacer(minLength: 12)
 
@@ -271,13 +416,21 @@ private struct TaskRowView: View {
             .menuIndicator(.hidden)
             .fixedSize()
 
-            if isHovering {
+            if isHovering && !isSelecting {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(L10n.text("Edit Task"))
+                .transition(.opacity)
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .accessibilityLabel(L10n.text("Delete Task"))
                 .transition(.opacity)
             }
         }
@@ -292,6 +445,11 @@ private struct TaskRowView: View {
         }
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.14), value: isHovering)
+        .contextMenu {
+            Button(L10n.text("Edit Task"), systemImage: "pencil", action: onEdit)
+            Divider()
+            Button(L10n.text("Delete Task"), systemImage: "trash", role: .destructive, action: onDelete)
+        }
     }
 }
 

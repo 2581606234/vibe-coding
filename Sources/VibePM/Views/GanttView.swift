@@ -4,7 +4,11 @@ import VibePMCore
 struct GanttView: View {
     let tasks: [ProjectTask]
     let accent: Color
+    let isSelecting: Bool
+    let selectedTaskIDs: Set<UUID>
+    let onToggleSelection: (ProjectTask) -> Void
     let onEdit: (ProjectTask) -> Void
+    let onDelete: (ProjectTask) -> Void
 
     private let calendar = Calendar.current
     private let taskColumnWidth: CGFloat = 236
@@ -105,9 +109,18 @@ struct GanttView: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                Circle()
-                    .fill(statusColor(for: task.status))
-                    .frame(width: 7, height: 7)
+                if isSelecting {
+                    Image(systemName: selectedTaskIDs.contains(task.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.callout)
+                        .foregroundStyle(selectedTaskIDs.contains(task.id) ? accent : .secondary)
+                        .accessibilityLabel(
+                            L10n.text(selectedTaskIDs.contains(task.id) ? "Deselect Task" : "Select Task")
+                        )
+                } else {
+                    Circle()
+                        .fill(statusColor(for: task.status))
+                        .frame(width: 7, height: 7)
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title)
@@ -128,7 +141,18 @@ struct GanttView: View {
         }
         .overlay(alignment: .bottom) { Divider().opacity(0.7) }
         .contentShape(Rectangle())
-        .onTapGesture { onEdit(task) }
+        .onTapGesture {
+            if isSelecting {
+                onToggleSelection(task)
+            } else {
+                onEdit(task)
+            }
+        }
+        .contextMenu {
+            Button(L10n.text("Edit Task"), systemImage: "pencil") { onEdit(task) }
+            Divider()
+            Button(L10n.text("Delete Task"), systemImage: "trash", role: .destructive) { onDelete(task) }
+        }
     }
 
     private func timelineCells(for task: ProjectTask, index: Int) -> some View {

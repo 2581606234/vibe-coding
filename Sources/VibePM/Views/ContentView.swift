@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var priorityFilter: TaskPriority?
     @State private var statusFilter: TaskStatus?
     @State private var taskViewMode: TaskViewMode = .list
+    @AppStorage("remindersEnabled") private var remindersEnabled = false
 
     private var activeProjects: [Project] {
         projects.filter { !$0.isArchived }
@@ -150,6 +151,7 @@ struct ContentView: View {
                 onEdit: presentTaskEditor,
                 onToggleCompletion: toggleCompletion,
                 onMove: moveTask,
+                onDelete: deleteTasks,
                 onEditProject: selectedProject.map { project in
                     { presentProjectEditor(project) }
                 },
@@ -374,6 +376,22 @@ struct ContentView: View {
 
     private func moveTask(_ task: ProjectTask, to status: TaskStatus) {
         task.move(to: status)
+    }
+
+    private func deleteTasks(_ selectedIDs: Set<UUID>) {
+        let deletionIDs = TaskHierarchy.deletionIDs(selectedIDs: selectedIDs, in: tasks)
+        let remainingTasks = tasks.filter { !deletionIDs.contains($0.id) }
+
+        for task in tasks where deletionIDs.contains(task.id) {
+            modelContext.delete(task)
+        }
+        try? modelContext.save()
+
+        if remindersEnabled {
+            Task {
+                try? await TaskReminderService.schedule(tasks: remainingTasks)
+            }
+        }
     }
 }
 

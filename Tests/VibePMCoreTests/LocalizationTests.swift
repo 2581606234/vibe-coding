@@ -29,6 +29,9 @@ struct LocalizationTests {
         #expect(
             L10n.format("%d Tasks", language: .simplifiedChinese, arguments: [3]) == "3 个任务"
         )
+        #expect(
+            L10n.format("Delete %d Tasks?", language: .simplifiedChinese, arguments: [2]) == "删除 2 个任务？"
+        )
     }
 
     @Test("Unknown strings remain readable")

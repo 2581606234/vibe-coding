@@ -1,6 +1,30 @@
 import Foundation
 
 public enum TaskHierarchy {
+    public static func deletionIDs(
+        selectedIDs: Set<UUID>,
+        in tasks: [ProjectTask]
+    ) -> Set<UUID> {
+        guard !selectedIDs.isEmpty else { return [] }
+
+        var childrenByParent: [UUID: [UUID]] = [:]
+        for task in tasks {
+            guard let parentTaskID = task.parentTaskID else { continue }
+            childrenByParent[parentTaskID, default: []].append(task.id)
+        }
+
+        var result = selectedIDs
+        var pending = Array(selectedIDs)
+        while let taskID = pending.popLast() {
+            for childID in childrenByParent[taskID, default: []] {
+                if result.insert(childID).inserted {
+                    pending.append(childID)
+                }
+            }
+        }
+        return result
+    }
+
     public static func parentFirst(_ tasks: [ProjectTask]) -> [ProjectTask] {
         guard tasks.count > 1 else { return tasks }
 
