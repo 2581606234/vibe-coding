@@ -14,7 +14,7 @@ VibePM is a fast, local-first macOS project manager for individuals who want to 
 
 ## MVP scope
 
-- Projects: create, rename, archive, and inspect.
+- Projects: create, rename, archive, restore, inspect, and permanently delete after confirmation.
 - Tasks: create, edit, complete, prioritize, schedule, move between Projects, and delete individually or in batches after confirmation.
 - Subtasks: one level of parent-child organization.
 - Views: Inbox, Today, Projects, and per-Project List, Board, and Gantt planning.

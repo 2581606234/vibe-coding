@@ -5,6 +5,7 @@ struct ProjectArchiveView: View {
     let projects: [Project]
     let taskCount: (Project) -> Int
     let onRestore: (Project) -> Void
+    let onDelete: (Project) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,10 +49,19 @@ struct ProjectArchiveView: View {
 
                                 Spacer()
 
-                                Button(L10n.text("Restore")) {
-                                    onRestore(project)
+                                HStack(spacing: 8) {
+                                    Button(L10n.text("Restore")) {
+                                        onRestore(project)
+                                    }
+                                    .buttonStyle(.bordered)
+
+                                    Button(role: .destructive) {
+                                        onDelete(project)
+                                    } label: {
+                                        Label(L10n.text("Delete Project"), systemImage: "trash")
+                                    }
+                                    .buttonStyle(.bordered)
                                 }
-                                .buttonStyle(.bordered)
                             }
                             .padding(14)
                             .vibeCard()

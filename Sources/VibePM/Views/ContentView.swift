@@ -29,6 +29,24 @@ private struct ProjectEditorRequest: Identifiable {
     let mode: Mode
 }
 
+private enum ProjectDestructiveRequest: Identifiable {
+    case archive(Project)
+    case delete(Project)
+
+    var project: Project {
+        switch self {
+        case let .archive(project), let .delete(project): project
+        }
+    }
+
+    var id: String {
+        switch self {
+        case let .archive(project): "archive-\(project.id)"
+        case let .delete(project): "delete-\(project.id)"
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.createdAt) private var projects: [Project]
@@ -37,6 +55,7 @@ struct ContentView: View {
     @State private var selection: SidebarSelection? = .inbox
     @State private var taskEditorRequest: TaskEditorRequest?
     @State private var projectEditorRequest: ProjectEditorRequest?
+    @State private var projectDestructiveRequest: ProjectDestructiveRequest?
     @State private var searchText = ""
     @State private var priorityFilter: TaskPriority?
     @State private var statusFilter: TaskStatus?
@@ -69,6 +88,7 @@ struct ContentView: View {
         .sheet(item: $projectEditorRequest) { request in
             projectEditor(for: request)
         }
+        .alert(item: $projectDestructiveRequest, content: projectDestructiveAlert)
         .searchable(text: $searchText, placement: .toolbar, prompt: L10n.text("Search Tasks"))
         .tint(VibeTheme.accent)
     }
@@ -102,7 +122,10 @@ struct ContentView: View {
                 ForEach(activeProjects) { project in
                     ProjectSidebarRow(
                         project: project,
-                        taskCount: taskCount(for: project)
+                        taskCount: taskCount(for: project),
+                        onEdit: { presentProjectEditor(project) },
+                        onArchive: { requestArchiveProject(project) },
+                        onDelete: { requestDeleteProject(project) }
                     )
                     .tag(SidebarSelection.project(project.id))
                 }
@@ -134,7 +157,8 @@ struct ContentView: View {
             ProjectArchiveView(
                 projects: archivedProjects,
                 taskCount: taskCount,
-                onRestore: restoreProject
+                onRestore: restoreProject,
+                onDelete: requestDeleteProject
             )
         } else {
             TaskCollectionView(
@@ -156,7 +180,10 @@ struct ContentView: View {
                     { presentProjectEditor(project) }
                 },
                 onArchiveProject: selectedProject.map { project in
-                    { archiveProject(project) }
+                    { requestArchiveProject(project) }
+                },
+                onDeleteProject: selectedProject.map { project in
+                    { requestDeleteProject(project) }
                 }
             )
         }
@@ -272,14 +299,65 @@ struct ContentView: View {
         projectEditorRequest = ProjectEditorRequest(mode: .edit(project))
     }
 
+    private func requestArchiveProject(_ project: Project) {
+        projectDestructiveRequest = .archive(project)
+    }
+
+    private func requestDeleteProject(_ project: Project) {
+        projectDestructiveRequest = .delete(project)
+    }
+
     private func archiveProject(_ project: Project) {
         project.archive()
+        try? modelContext.save()
         selection = .inbox
     }
 
     private func restoreProject(_ project: Project) {
         project.restore()
+        try? modelContext.save()
         selection = .project(project.id)
+    }
+
+    private func deleteProject(_ project: Project) {
+        let deletionTaskIDs = ProjectDeletion.taskIDs(for: project.id, in: tasks)
+        let remainingTasks = tasks.filter { !deletionTaskIDs.contains($0.id) }
+
+        for task in tasks where deletionTaskIDs.contains(task.id) {
+            modelContext.delete(task)
+        }
+        modelContext.delete(project)
+        try? modelContext.save()
+        selection = .inbox
+
+        if remindersEnabled {
+            Task {
+                try? await TaskReminderService.schedule(tasks: remainingTasks)
+            }
+        }
+    }
+
+    private func projectDestructiveAlert(for request: ProjectDestructiveRequest) -> Alert {
+        switch request {
+        case let .archive(project):
+            Alert(
+                title: Text(L10n.format("Archive \"%@\"?", arguments: [project.name])),
+                message: Text(L10n.text("The Project and its Tasks will move to Archive. You can restore them later.")),
+                primaryButton: .default(Text(L10n.text("Archive Project"))) {
+                    archiveProject(project)
+                },
+                secondaryButton: .cancel(Text(L10n.text("Cancel")))
+            )
+        case let .delete(project):
+            Alert(
+                title: Text(L10n.format("Delete \"%@\"?", arguments: [project.name])),
+                message: Text(L10n.text("The Project and all of its Tasks and Subtasks will be permanently deleted. This cannot be undone.")),
+                primaryButton: .destructive(Text(L10n.text("Delete Project"))) {
+                    deleteProject(project)
+                },
+                secondaryButton: .cancel(Text(L10n.text("Cancel")))
+            )
+        }
     }
 
     @ViewBuilder
@@ -424,6 +502,9 @@ private struct BrandHeader: View {
 private struct ProjectSidebarRow: View {
     let project: Project
     let taskCount: Int
+    let onEdit: () -> Void
+    let onArchive: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack {
@@ -435,6 +516,12 @@ private struct ProjectSidebarRow: View {
                 .lineLimit(1)
             Spacer()
             CountBadge(count: taskCount)
+        }
+        .contextMenu {
+            Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEdit)
+            Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchive)
+            Divider()
+            Button(L10n.text("Delete Project"), systemImage: "trash", role: .destructive, action: onDelete)
         }
     }
 }

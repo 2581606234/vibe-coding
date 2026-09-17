@@ -18,6 +18,7 @@ struct TaskCollectionView: View {
     let onDelete: (Set<UUID>) -> Void
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
+    let onDeleteProject: (() -> Void)?
 
     @State private var isSelecting = false
     @State private var selectedTaskIDs: Set<UUID> = []
@@ -73,15 +74,6 @@ struct TaskCollectionView: View {
         }
         .toolbar {
             ToolbarItemGroup {
-                if let onEditProject, let onArchiveProject {
-                    Menu {
-                        Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEditProject)
-                        Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchiveProject)
-                    } label: {
-                        Label(L10n.text("Project actions"), systemImage: "ellipsis.circle")
-                    }
-                }
-
                 if !tasks.isEmpty {
                     Button(action: toggleSelectionMode) {
                         Label(
@@ -137,6 +129,8 @@ struct TaskCollectionView: View {
                 Spacer()
 
                 if supportsProjectViews {
+                    projectActionsMenu
+
                     Picker(L10n.text("View"), selection: $viewMode) {
                         ForEach(TaskViewMode.allCases, id: \.self) { mode in
                             Label(L10n.text(mode.title), systemImage: mode.systemImage).tag(mode)
@@ -187,6 +181,27 @@ struct TaskCollectionView: View {
         .padding(.horizontal, 28)
         .padding(.top, 24)
         .padding(.bottom, 20)
+    }
+
+    @ViewBuilder
+    private var projectActionsMenu: some View {
+        if let onEditProject, let onArchiveProject, let onDeleteProject {
+            Menu {
+                Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEditProject)
+                Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchiveProject)
+                Divider()
+                Button(
+                    L10n.text("Delete Project"),
+                    systemImage: "trash",
+                    role: .destructive,
+                    action: onDeleteProject
+                )
+            } label: {
+                Label(L10n.text("Project actions"), systemImage: "ellipsis.circle")
+            }
+            .buttonStyle(.bordered)
+            .fixedSize()
+        }
     }
 
     private var filterMenu: some View {
