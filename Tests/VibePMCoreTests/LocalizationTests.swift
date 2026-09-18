@@ -36,6 +36,9 @@ struct LocalizationTests {
             L10n.format("Delete \"%@\"?", language: .simplifiedChinese, arguments: ["发布计划"])
                 == "删除“发布计划”？"
         )
+        #expect(
+            L10n.text("Priority: High to Low", language: .simplifiedChinese) == "优先级：从高到低"
+        )
     }
 
     @Test("Unknown strings remain readable")

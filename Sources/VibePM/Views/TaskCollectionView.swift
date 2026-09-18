@@ -11,6 +11,7 @@ struct TaskCollectionView: View {
     @Binding var viewMode: TaskViewMode
     @Binding var priorityFilter: TaskPriority?
     @Binding var statusFilter: TaskStatus?
+    @Binding var sortOption: TaskSortOption
     let onAdd: () -> Void
     let onEdit: (ProjectTask) -> Void
     let onToggleCompletion: (ProjectTask) -> Void
@@ -27,7 +28,7 @@ struct TaskCollectionView: View {
     @State private var showsDeleteConfirmation = false
 
     private var orderedTasks: [ProjectTask] {
-        TaskHierarchy.parentFirst(tasks)
+        TaskSorter.parentFirst(tasks, by: sortOption)
     }
 
     var body: some View {
@@ -38,7 +39,7 @@ struct TaskCollectionView: View {
                 emptyState
             } else if supportsProjectViews && viewMode == .board {
                 TaskBoardView(
-                    tasks: tasks,
+                    tasks: orderedTasks,
                     accent: accent,
                     isSelecting: isSelecting,
                     selectedTaskIDs: selectedTaskIDs,
@@ -49,7 +50,7 @@ struct TaskCollectionView: View {
                 )
             } else if supportsProjectViews && viewMode == .gantt {
                 GanttView(
-                    tasks: tasks,
+                    tasks: orderedTasks,
                     accent: accent,
                     isSelecting: isSelecting,
                     selectedTaskIDs: selectedTaskIDs,
@@ -128,6 +129,13 @@ struct TaskCollectionView: View {
 
                 Spacer()
 
+                Button(action: onAdd) {
+                    Label(L10n.text("New Task"), systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                .fixedSize()
+
                 if supportsProjectViews {
                     projectActionsMenu
 
@@ -144,6 +152,7 @@ struct TaskCollectionView: View {
 
             HStack(spacing: 10) {
                 filterMenu
+                sortMenu
                 if priorityFilter != nil || statusFilter != nil {
                     Button(L10n.text("Clear Filters"), systemImage: "xmark.circle") {
                         priorityFilter = nil
@@ -227,6 +236,21 @@ struct TaskCollectionView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker(L10n.text("Sort Tasks"), selection: $sortOption) {
+                ForEach(TaskSortOption.allCases, id: \.self) { option in
+                    Text(L10n.text(option.title)).tag(option)
+                }
+            }
+        } label: {
+            Label(L10n.text(sortOption.title), systemImage: "arrow.up.arrow.down.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(L10n.text("Sort Tasks"))
     }
 
     private var taskList: some View {

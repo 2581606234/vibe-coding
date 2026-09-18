@@ -61,6 +61,7 @@ struct ContentView: View {
     @State private var statusFilter: TaskStatus?
     @State private var taskViewMode: TaskViewMode = .list
     @AppStorage("remindersEnabled") private var remindersEnabled = false
+    @AppStorage(TaskSortOption.userDefaultsKey) private var taskSortRawValue = TaskSortOption.createdNewest.rawValue
 
     private var activeProjects: [Project] {
         projects.filter { !$0.isArchived }
@@ -82,7 +83,7 @@ struct ContentView: View {
             detail
         }
         .navigationSplitViewStyle(.balanced)
-        .sheet(item: $taskEditorRequest) { request in
+        .sheet(item: $taskEditorRequest, onDismiss: { taskEditorRequest = nil }) { request in
             taskEditor(for: request)
         }
         .sheet(item: $projectEditorRequest) { request in
@@ -171,6 +172,7 @@ struct ContentView: View {
                 viewMode: $taskViewMode,
                 priorityFilter: $priorityFilter,
                 statusFilter: $statusFilter,
+                sortOption: taskSortBinding,
                 onAdd: presentNewTask,
                 onEdit: presentTaskEditor,
                 onToggleCompletion: toggleCompletion,
@@ -200,6 +202,13 @@ struct ContentView: View {
         case .archive:
             L10n.text("Archive")
         }
+    }
+
+    private var taskSortBinding: Binding<TaskSortOption> {
+        Binding(
+            get: { TaskSortOption(rawValue: taskSortRawValue) ?? .createdNewest },
+            set: { taskSortRawValue = $0.rawValue }
+        )
     }
 
     private var detailSubtitle: String {
@@ -416,6 +425,7 @@ struct ContentView: View {
                 parentTasks: parentTaskCandidates()
             ) { draft in
                 modelContext.insert(normalizedHierarchy(draft).makeTask())
+                taskEditorRequest = nil
             }
         case let .edit(task):
             TaskEditorView(
@@ -425,6 +435,7 @@ struct ContentView: View {
                 parentTasks: parentTaskCandidates(excluding: task.id)
             ) { draft in
                 normalizedHierarchy(draft).apply(to: task)
+                taskEditorRequest = nil
             }
         }
     }

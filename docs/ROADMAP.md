@@ -42,3 +42,17 @@ Exit: release-candidate quality with documented backup and recovery.
 - Package a signed DMG; evaluate the Mac App Store separately.
 
 Exit: a clean Mac can install, launch, update, and remove VibePM safely.
+
+## Product gap review — 2026-09-18
+
+The next work should prioritize trust and planning depth in this order:
+
+1. Add Undo and a recoverable Trash for Task and Project deletion.
+2. Surface persistence failures instead of silently ignoring save errors.
+3. Add import preview, validation errors, and conflict choices before Excel data is committed.
+4. Add bulk edit and bulk move for selected Tasks, not only bulk deletion.
+5. Add manual drag ordering as an alternative to automatic sorting.
+6. Add milestones and Task dependencies so the Gantt view can represent real delivery sequencing.
+7. Add recurring Tasks and more precise reminder controls.
+8. Add tags and saved smart views for cross-Project organization.
+9. Add an in-app update path and notarized distribution for dependable upgrades.
