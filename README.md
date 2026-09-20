@@ -40,4 +40,4 @@ The script creates `dist/VibePM.app` and `dist/VibePM.dmg`. See `docs/INSTALL.md
 
 Product scope lives in `docs/PRODUCT.md`; delivery milestones live in `docs/ROADMAP.md`.
 
-The current development release is 0.8.0. Its requirements and acceptance evidence are in `docs/PRD-v0.8-data-trust.md` and `docs/acceptance/0.8.0.md`.
+The current development release is 0.8.1. It adds confirmed one-click Trash cleanup; requirements and acceptance evidence are in `docs/PRD-v0.8.1-empty-trash.md` and `docs/acceptance/0.8.1.md`.

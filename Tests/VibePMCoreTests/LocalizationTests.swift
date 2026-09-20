@@ -39,6 +39,8 @@ struct LocalizationTests {
         #expect(
             L10n.text("Priority: High to Low", language: .simplifiedChinese) == "优先级：从高到低"
         )
+        #expect(L10n.text("Empty Trash", language: .simplifiedChinese) == "清空废纸篓")
+        #expect(L10n.text("Empty Trash", language: .english) == "Empty Trash")
     }
 
     @Test("Unknown strings remain readable")

@@ -81,4 +81,26 @@ struct TrashManagerTests {
 
         #expect(TrashManager.expiredTaskIDs(in: [old, recent], now: now, calendar: calendar) == [old.id])
     }
+
+    @Test("Empty Trash includes deleted Tasks and every Task attached to a deleted Project")
+    func permanentDeletionScope() {
+        let trashedProject = Project(name: "Trashed")
+        let activeProject = Project(name: "Active")
+        trashedProject.moveToTrash(batchID: UUID())
+
+        let projectTask = ProjectTask(title: "Project Task", projectID: trashedProject.id)
+        let olderDeletedTask = ProjectTask(title: "Older", projectID: trashedProject.id)
+        let independentDeletedTask = ProjectTask(title: "Independent")
+        let activeTask = ProjectTask(title: "Keep", projectID: activeProject.id)
+        olderDeletedTask.moveToTrash(batchID: UUID())
+        independentDeletedTask.moveToTrash(batchID: UUID())
+
+        let ids = TrashManager.permanentDeletionTaskIDs(
+            projects: [trashedProject, activeProject],
+            tasks: [projectTask, olderDeletedTask, independentDeletedTask, activeTask]
+        )
+
+        #expect(ids == [projectTask.id, olderDeletedTask.id, independentDeletedTask.id])
+        #expect(!ids.contains(activeTask.id))
+    }
 }

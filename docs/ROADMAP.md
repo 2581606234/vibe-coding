@@ -74,3 +74,11 @@ Exit: 48 automated tests pass, the ad-hoc signed application and DMG verify, and
 4. Recurring Tasks and reminder lead-time controls.
 5. Tags and saved smart views across Projects.
 6. Notarized distribution and an in-app update channel.
+
+## Milestone 3.1.1 — Trash cleanup (0.8.1)
+
+- One-click Empty Trash action with destructive confirmation.
+- Complete removal of deleted Projects, their associated Tasks, and independently deleted Task batches.
+- Active data exclusion and rollback on persistence failure.
+
+Exit: 49 automated tests pass and packaged bilingual UI acceptance verifies cancel and confirm paths.

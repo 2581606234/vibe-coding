@@ -75,4 +75,15 @@ public enum TrashManager {
         let cutoff = calendar.date(byAdding: .day, value: -retentionDays, to: now) ?? now
         return Set(tasks.lazy.filter { ($0.deletedAt ?? .distantFuture) <= cutoff }.map(\.id))
     }
+
+    public static func permanentDeletionTaskIDs(
+        projects: [Project],
+        tasks: [ProjectTask]
+    ) -> Set<UUID> {
+        let trashedProjectIDs = Set(projects.lazy.filter { $0.deletedAt != nil }.map(\.id))
+        return Set(tasks.lazy.filter { task in
+            task.deletedAt != nil
+                || (task.projectID.map { trashedProjectIDs.contains($0) } ?? false)
+        }.map(\.id))
+    }
 }

@@ -34,18 +34,26 @@ struct TrashView: View {
     let onRestore: (UUID) -> Void
     let onPermanentlyDeleteProject: (Project) -> Void
     let onPermanentlyDeleteTaskGroup: (TrashTaskGroup) -> Void
+    let onEmptyTrash: () -> Void
 
     @State private var pendingDeletion: PendingDeletion?
 
     private enum PendingDeletion: Identifiable {
         case project(Project)
         case taskGroup(TrashTaskGroup)
+        case all
 
-        var id: UUID {
+        var id: String {
             switch self {
-            case let .project(project): project.id
-            case let .taskGroup(group): group.id
+            case let .project(project): "project-\(project.id)"
+            case let .taskGroup(group): "task-group-\(group.id)"
+            case .all: "all"
             }
+        }
+
+        var isAll: Bool {
+            if case .all = self { return true }
+            return false
         }
     }
 
@@ -89,12 +97,15 @@ struct TrashView: View {
         .background(VibeTheme.canvas)
         .alert(item: $pendingDeletion) { item in
             Alert(
-                title: Text(L10n.text("Delete Permanently?")),
-                message: Text(L10n.text("This data will be permanently deleted and cannot be restored.")),
-                primaryButton: .destructive(Text(L10n.text("Delete Permanently"))) {
+                title: Text(L10n.text(item.isAll ? "Empty Trash?" : "Delete Permanently?")),
+                message: Text(L10n.text(item.isAll
+                    ? "All Projects and Tasks in Trash will be permanently deleted. This cannot be undone."
+                    : "This data will be permanently deleted and cannot be restored.")),
+                primaryButton: .destructive(Text(L10n.text(item.isAll ? "Empty Trash" : "Delete Permanently"))) {
                     switch item {
                     case let .project(project): onPermanentlyDeleteProject(project)
                     case let .taskGroup(group): onPermanentlyDeleteTaskGroup(group)
+                    case .all: onEmptyTrash()
                     }
                 },
                 secondaryButton: .cancel(Text(L10n.text("Cancel")))
@@ -119,6 +130,14 @@ struct TrashView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if !projects.isEmpty || !taskGroups.isEmpty {
+                Button(L10n.text("Empty Trash"), systemImage: "trash.slash", role: .destructive) {
+                    pendingDeletion = .all
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityLabel(L10n.text("Empty Trash"))
+            }
         }
         .padding(.horizontal, 28)
         .padding(.top, 24)

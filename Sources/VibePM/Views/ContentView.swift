@@ -212,7 +212,8 @@ struct ContentView: View {
                 taskCount: { project in tasks.count { $0.projectID == project.id } },
                 onRestore: restoreDeletionBatch,
                 onPermanentlyDeleteProject: permanentlyDeleteProject,
-                onPermanentlyDeleteTaskGroup: permanentlyDeleteTaskGroup
+                onPermanentlyDeleteTaskGroup: permanentlyDeleteTaskGroup,
+                onEmptyTrash: emptyTrash
             )
         } else {
             TaskCollectionView(
@@ -572,6 +573,21 @@ struct ContentView: View {
             modelContext.delete(task)
         }
         persistChanges()
+    }
+
+    private func emptyTrash() {
+        let taskIDs = TrashManager.permanentDeletionTaskIDs(projects: projects, tasks: tasks)
+        for task in tasks where taskIDs.contains(task.id) {
+            modelContext.delete(task)
+        }
+        for project in trashedProjects {
+            modelContext.delete(project)
+        }
+        persistChanges {
+            undoBatchID = nil
+            undoToken = nil
+            refreshReminders()
+        }
     }
 
     @discardableResult
