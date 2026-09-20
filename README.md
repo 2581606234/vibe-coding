@@ -40,4 +40,4 @@ The script creates `dist/VibePM.app` and `dist/VibePM.dmg`. See `docs/INSTALL.md
 
 Product scope lives in `docs/PRODUCT.md`; delivery milestones live in `docs/ROADMAP.md`.
 
-The current development release is 0.8.4. Templates now use optional IDs and omit system audit timestamps, while full exports retain stable UUIDs for update-safe reimport; requirements and acceptance evidence are in `docs/PRD-v0.8.4-import-identity-and-audit-fields.md` and `docs/acceptance/0.8.4.md`.
+The current development release is 0.8.5. Every Project now has scoped Excel import, export, and localized template actions with create/update/skip/conflict preview and cross-Project identity protection; requirements and acceptance evidence are in `docs/PRD-v0.8.5-project-scoped-import-export.md` and `docs/acceptance/0.8.5.md`.

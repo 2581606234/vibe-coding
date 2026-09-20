@@ -109,3 +109,12 @@ Exit: localized template round-trip tests, workbook structure checks, visual ins
 - Timestamp-free updates preserve the original creation time and record the import as the latest update.
 
 Exit: blank-ID creation, exported-ID update preview, timestamp preservation, compatibility, packaging, and workbook visual checks pass.
+
+## Milestone 3.1.5 — Project-scoped Excel exchange (0.8.5)
+
+- Add Project-level export, import, and localized template actions while retaining global Data-settings exchange.
+- Scope imported new Tasks and Subtasks to the selected Project automatically.
+- Classify Project imports as Create, Update, Skip, or Conflict before committing.
+- Block cross-Project Task IDs and Parent Task references so Project imports cannot silently move or overwrite unrelated work.
+
+Exit: Project-scoped round trips, unchanged-row skipping, conflict protection, localization, global compatibility, packaging, and UI acceptance pass.

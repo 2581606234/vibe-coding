@@ -20,6 +20,9 @@ struct TaskCollectionView: View {
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
     let onDeleteProject: (() -> Void)?
+    let onImportProjectTasks: (() -> Void)?
+    let onExportProject: (() -> Void)?
+    let onExportProjectTemplate: (() -> Void)?
 
     @State private var isSelecting = false
     @State private var selectedTaskIDs: Set<UUID> = []
@@ -194,8 +197,17 @@ struct TaskCollectionView: View {
 
     @ViewBuilder
     private var projectActionsMenu: some View {
-        if let onEditProject, let onArchiveProject, let onDeleteProject {
+        if let onEditProject,
+           let onArchiveProject,
+           let onDeleteProject,
+           let onImportProjectTasks,
+           let onExportProject,
+           let onExportProjectTemplate {
             Menu {
+                Button(L10n.text("Import Tasks…"), systemImage: "square.and.arrow.down", action: onImportProjectTasks)
+                Button(L10n.text("Export Project…"), systemImage: "square.and.arrow.up", action: onExportProject)
+                Button(L10n.text("Download Template…"), systemImage: "arrow.down.doc", action: onExportProjectTemplate)
+                Divider()
                 Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEditProject)
                 Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchiveProject)
                 Divider()

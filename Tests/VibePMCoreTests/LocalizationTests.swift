@@ -45,6 +45,13 @@ struct LocalizationTests {
             L10n.format("Moved to Trash: %@", language: .simplifiedChinese, arguments: ["2026-09-20 16:00"])
                 == "进入废纸篓：2026-09-20 16:00"
         )
+        #expect(
+            L10n.format(
+                "Imported %d new Tasks and updated %d Tasks in %@.",
+                language: .simplifiedChinese,
+                arguments: [2, 1, "药明津石"]
+            ) == "已在“药明津石”中新增 2 个任务并更新 1 个任务。"
+        )
     }
 
     @Test("Unknown strings remain readable")

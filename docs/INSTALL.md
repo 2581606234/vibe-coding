@@ -27,6 +27,10 @@ The current development release is ad-hoc signed rather than notarized with an A
 10. Open Settings → Data, download the Excel template, and confirm its language follows the app and its Status, Priority, Project, and Parent Task fields provide drop-down choices.
 11. Import an Excel workbook, verify the Import Preview create/update counts, cancel once, then confirm the import.
 12. Create and export a Recovery Point; restore it and confirm the local snapshot is replaced exactly.
+13. Open a Project's **Project actions** menu and verify **Import Tasks…**, **Export Project…**, and **Download Template…**.
+14. Export the Project and reimport it; verify Import Preview reports unchanged Tasks as Skip.
+15. Import a Project template with a blank Task ID; verify the Task is created in the current Project without a Project column.
+16. Attempt to import a Task ID from another Project; verify a blocking Conflict is shown and Import is disabled.
 13. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
 14. Quit and reopen VibePM to confirm local data, language selection, and latest automatic Recovery Point time persist.
 

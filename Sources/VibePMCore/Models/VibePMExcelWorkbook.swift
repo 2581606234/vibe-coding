@@ -274,7 +274,7 @@ public struct VibePMExcelWorkbook: Sendable {
         ]
     }
 
-    private static func stableID(namespace: String, key: String) -> UUID {
+    fileprivate static func stableID(namespace: String, key: String) -> UUID {
         if let id = UUID(uuidString: key) { return id }
         let digest = SHA256.hash(data: Data("vibepm:\(namespace):\(key)".utf8))
         var bytes = Array(digest.prefix(16))
@@ -286,7 +286,7 @@ public struct VibePMExcelWorkbook: Sendable {
         ))
     }
 
-    private static func nonEmpty(_ value: String) -> String? {
+    fileprivate static func nonEmpty(_ value: String) -> String? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
     }
@@ -315,7 +315,7 @@ public struct VibePMExcelWorkbook: Sendable {
         return accent
     }
 
-    private static func parseStatus(_ value: String?, row: Int) throws -> TaskStatus {
+    fileprivate static func parseStatus(_ value: String?, row: Int) throws -> TaskStatus {
         let aliases: [String: TaskStatus] = [
             "todo": .todo, "to do": .todo, "待办": .todo,
             "inprogress": .inProgress, "in progress": .inProgress, "进行中": .inProgress,
@@ -328,7 +328,7 @@ public struct VibePMExcelWorkbook: Sendable {
         return status
     }
 
-    private static func parsePriority(_ value: String?, row: Int) throws -> TaskPriority {
+    fileprivate static func parsePriority(_ value: String?, row: Int) throws -> TaskPriority {
         let aliases: [String: TaskPriority] = [
             "none": .none, "无": .none, "low": .low, "低": .low,
             "medium": .medium, "中": .medium, "high": .high, "高": .high
@@ -340,7 +340,7 @@ public struct VibePMExcelWorkbook: Sendable {
         return priority
     }
 
-    private static func parseDate(
+    fileprivate static func parseDate(
         _ value: String?,
         sheet: String = "Tasks",
         row: Int,
@@ -365,6 +365,239 @@ public struct VibePMExcelWorkbook: Sendable {
     }
 }
 
+public struct ProjectExcelWorkbook: Sendable {
+    public let tasks: [TaskRecord]
+    public let sourceProjectID: UUID?
+    public let sourceProjectName: String?
+    private let includesTaskAuditTimestamps: Bool
+
+    public init(project: Project, tasks: [ProjectTask]) {
+        sourceProjectID = project.id
+        sourceProjectName = project.name
+        self.tasks = tasks
+            .filter { $0.projectID == project.id && $0.deletedAt == nil }
+            .map(TaskRecord.init)
+        includesTaskAuditTimestamps = true
+    }
+
+    private init(
+        tasks: [TaskRecord],
+        sourceProjectID: UUID?,
+        sourceProjectName: String?,
+        includesTaskAuditTimestamps: Bool
+    ) {
+        self.tasks = tasks
+        self.sourceProjectID = sourceProjectID
+        self.sourceProjectName = sourceProjectName
+        self.includesTaskAuditTimestamps = includesTaskAuditTimestamps
+    }
+
+    public func encoded(project: Project) throws -> Data {
+        try ExcelArchive.makeProjectScoped(
+            projectRows: [Self.projectRow(ProjectRecord(project: project))],
+            taskRows: tasks.map(Self.taskRow),
+            templateLanguage: nil
+        )
+    }
+
+    public static func templateData(
+        project: Project,
+        language: AppLanguage = L10n.selectedLanguage()
+    ) throws -> Data {
+        let language = language.resolved()
+        let isChinese = language == .simplifiedChinese
+        let parentKey = isChinese ? "任务-项目示例" : "task-project-example"
+        return try ExcelArchive.makeProjectScoped(
+            projectRows: [[
+                .text(project.id.uuidString),
+                .text(project.name),
+                .text(project.projectDescription),
+                .text(project.accent.rawValue),
+                .bool(project.isArchived)
+            ]],
+            taskRows: [
+                [
+                    .text(parentKey),
+                    .text(isChinese ? "项目计划" : "Project plan"),
+                    .text(isChinese ? "拆分并推进项目工作" : "Break down and deliver the Project work"),
+                    .text(isChinese ? "进行中" : "inProgress"),
+                    .text(isChinese ? "高" : "high"),
+                    .blank,
+                    .date(.now),
+                    .date(Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now),
+                    .blank
+                ],
+                [
+                    .blank,
+                    .text(isChinese ? "确认下一步" : "Confirm the next action"),
+                    .text(isChinese ? "这是一个子任务示例" : "This is a Subtask example"),
+                    .text(isChinese ? "待办" : "todo"),
+                    .text(isChinese ? "中" : "medium"),
+                    .text(parentKey),
+                    .date(.now),
+                    .date(Calendar.current.date(byAdding: .day, value: 2, to: .now) ?? .now),
+                    .blank
+                ]
+            ],
+            templateLanguage: language
+        )
+    }
+
+    public static func decoded(from data: Data) throws -> Self {
+        let archive = try Archive(data: data, accessMode: .read)
+        let sharedStrings = try archive.sharedStrings()
+        let projectTable = try archive.table(at: "xl/worksheets/sheet1.xml", sharedStrings: sharedStrings)
+        let taskTable = try archive.table(at: "xl/worksheets/sheet2.xml", sharedStrings: sharedStrings)
+        let taskHeaders = taskTable.canonicalHeaders
+        guard !taskHeaders.contains("project_key") else {
+            throw ExcelWorkbookError.projectScopedWorkbookRequired
+        }
+        let projectRows = try projectTable.records(
+            sheet: "Projects",
+            requiredHeaders: ExcelArchive.projectRequiredHeaders
+        )
+        let taskRows = try taskTable.records(
+            sheet: "Tasks",
+            requiredHeaders: ExcelArchive.projectTaskRequiredHeaders
+        )
+
+        let sourceKey = projectRows.first?["project_key"].flatMap(VibePMExcelWorkbook.nonEmpty)
+        let sourceID = sourceKey.map { VibePMExcelWorkbook.stableID(namespace: "project", key: $0) }
+        let sourceName = projectRows.first?["name"].flatMap(VibePMExcelWorkbook.nonEmpty)
+
+        var taskIDs: [String: UUID] = [:]
+        var rowIDs: [UUID] = []
+        for row in taskRows {
+            let key = row["task_key"].flatMap(VibePMExcelWorkbook.nonEmpty)
+            if let key {
+                guard taskIDs[key] == nil else {
+                    throw ExcelWorkbookError.duplicateKey(sheet: "Tasks", key: key)
+                }
+            }
+            let id = key.map { VibePMExcelWorkbook.stableID(namespace: "task", key: $0) } ?? UUID()
+            rowIDs.append(id)
+            if let key { taskIDs[key] = id }
+        }
+
+        let now = Date.now
+        let records = try taskRows.enumerated().map { index, row in
+            let rowNumber = index + 2
+            let status = try VibePMExcelWorkbook.parseStatus(row["status"], row: rowNumber)
+            let parentKey = row["parent_task_key"].flatMap(VibePMExcelWorkbook.nonEmpty)
+            let parentID = parentKey.map {
+                taskIDs[$0] ?? VibePMExcelWorkbook.stableID(namespace: "task", key: $0)
+            }
+            return TaskRecord(
+                id: rowIDs[index],
+                title: try row.required("title", sheet: "Tasks", row: rowNumber),
+                taskDescription: row["description"] ?? "",
+                status: status,
+                priority: try VibePMExcelWorkbook.parsePriority(row["priority"], row: rowNumber),
+                projectID: sourceID,
+                parentTaskID: parentID,
+                scheduledFor: try VibePMExcelWorkbook.parseDate(row["scheduled_for"], row: rowNumber, column: "scheduled_for"),
+                dueAt: try VibePMExcelWorkbook.parseDate(row["due_at"], row: rowNumber, column: "due_at"),
+                completedAt: try VibePMExcelWorkbook.parseDate(row["completed_at"], sheet: "Tasks", row: rowNumber, column: "completed_at") ?? (status == .done ? now : nil),
+                createdAt: try VibePMExcelWorkbook.parseDate(row["created_at"], sheet: "Tasks", row: rowNumber, column: "created_at") ?? now,
+                updatedAt: try VibePMExcelWorkbook.parseDate(row["updated_at"], sheet: "Tasks", row: rowNumber, column: "updated_at") ?? now,
+                deletedAt: nil,
+                deletionBatchID: nil
+            )
+        }
+
+        return Self(
+            tasks: records,
+            sourceProjectID: sourceID,
+            sourceProjectName: sourceName,
+            includesTaskAuditTimestamps: taskHeaders.contains("created_at") && taskHeaders.contains("updated_at")
+        )
+    }
+
+    @MainActor
+    public func restore(
+        into context: ModelContext,
+        targetProjectID: UUID,
+        existingTasks: [ProjectTask]
+    ) throws {
+        let preview = ProjectWorkbookImportPreview(
+            workbook: self,
+            targetProjectID: targetProjectID,
+            existingTasks: existingTasks
+        )
+        guard preview.conflicts == 0 else {
+            throw ProjectWorkbookImportError.conflictsPresent(preview.conflicts)
+        }
+
+        let existingByID = Dictionary(uniqueKeysWithValues: existingTasks.map { ($0.id, $0) })
+        let importedAt = Date.now
+        for record in tasks {
+            if let existing = existingByID[record.id] {
+                guard preview.updateIDs.contains(record.id) else { continue }
+                normalized(record, targetProjectID: targetProjectID, existing: existing, importedAt: importedAt)
+                    .apply(to: existing)
+            } else {
+                context.insert(normalized(record, targetProjectID: targetProjectID, existing: nil, importedAt: importedAt).makeTask())
+            }
+        }
+        try context.save()
+    }
+
+    private func normalized(
+        _ record: TaskRecord,
+        targetProjectID: UUID,
+        existing: ProjectTask?,
+        importedAt: Date
+    ) -> TaskRecord {
+        TaskRecord(
+            id: record.id,
+            title: record.title,
+            taskDescription: record.taskDescription,
+            status: record.status,
+            priority: record.priority,
+            projectID: targetProjectID,
+            parentTaskID: record.parentTaskID,
+            scheduledFor: record.scheduledFor,
+            dueAt: record.dueAt,
+            completedAt: record.completedAt,
+            createdAt: includesTaskAuditTimestamps ? record.createdAt : (existing?.createdAt ?? importedAt),
+            updatedAt: includesTaskAuditTimestamps ? record.updatedAt : importedAt,
+            deletedAt: nil,
+            deletionBatchID: nil
+        )
+    }
+
+    private static func projectRow(_ project: ProjectRecord) -> [ExcelCell] {
+        [
+            .text(project.id.uuidString), .text(project.name), .text(project.projectDescription),
+            .text(project.accent.rawValue), .bool(project.isArchived),
+            .dateTime(project.createdAt), .dateTime(project.updatedAt)
+        ]
+    }
+
+    private static func taskRow(_ task: TaskRecord) -> [ExcelCell] {
+        [
+            .text(task.id.uuidString), .text(task.title), .text(task.taskDescription),
+            .text(task.status.rawValue), .text(task.priority.title.lowercased()),
+            task.parentTaskID.map { .text($0.uuidString) } ?? .blank,
+            task.scheduledFor.map(ExcelCell.date) ?? .blank,
+            task.dueAt.map(ExcelCell.date) ?? .blank,
+            task.completedAt.map(ExcelCell.dateTime) ?? .blank,
+            .dateTime(task.createdAt), .dateTime(task.updatedAt)
+        ]
+    }
+}
+
+public enum ProjectWorkbookImportError: LocalizedError, Equatable {
+    case conflictsPresent(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .conflictsPresent(count):
+            "存在 \(count) 个冲突，请先修正工作簿 / \(count) conflicts must be resolved before import."
+        }
+    }
+}
+
 public enum ExcelWorkbookError: LocalizedError, Equatable {
     case missingWorksheet(String)
     case emptyWorksheet(String)
@@ -374,6 +607,7 @@ public enum ExcelWorkbookError: LocalizedError, Equatable {
     case unknownReference(sheet: String, row: Int, column: String, key: String)
     case invalidValue(sheet: String, row: Int, column: String, value: String)
     case malformedWorkbook
+    case projectScopedWorkbookRequired
 
     public var errorDescription: String? {
         switch self {
@@ -385,6 +619,7 @@ public enum ExcelWorkbookError: LocalizedError, Equatable {
         case let .unknownReference(sheet, row, column, key): "\(sheet) 第 \(row) 行的 \(column) 引用了不存在的键：\(key) / Unknown reference in \(sheet) row \(row): \(key)."
         case let .invalidValue(sheet, row, column, value): "\(sheet) 第 \(row) 行的 \(column) 值无效：\(value) / Invalid value in \(sheet) row \(row)."
         case .malformedWorkbook: "Excel 文件结构无效 / The Excel workbook is malformed."
+        case .projectScopedWorkbookRequired: "请使用当前项目导出的工作簿或项目任务模板 / Use a workbook exported from this Project or its Task template."
         }
     }
 }
@@ -412,6 +647,14 @@ private enum ExcelArchive {
     static let taskRequiredHeaders = [
         "task_key", "title", "description", "status", "priority",
         "project_key", "parent_task_key", "scheduled_for", "due_at", "completed_at"
+    ]
+    static let projectTaskHeaders = [
+        "task_key", "title", "description", "status", "priority",
+        "parent_task_key", "scheduled_for", "due_at", "completed_at", "created_at", "updated_at"
+    ]
+    static let projectTaskRequiredHeaders = [
+        "task_key", "title", "description", "status", "priority",
+        "parent_task_key", "scheduled_for", "due_at", "completed_at"
     ]
 
     private struct ExcelValidation {
@@ -521,6 +764,76 @@ private enum ExcelArchive {
             ]
         }
 
+        var projectTaskHeaders: [String] {
+            guard isTemplate else { return ExcelArchive.projectTaskHeaders }
+            if isChinese {
+                return [
+                    "任务编号（新建可留空）", "任务标题", "任务描述", "状态", "优先级", "父任务",
+                    "安排日期", "截止日期", "完成时间"
+                ]
+            }
+            return [
+                "Task ID (optional for new)", "Task title", "Task description", "Status", "Priority",
+                "Parent Task ID", "Scheduled date", "Due date", "Completed at"
+            ]
+        }
+
+        var projectTaskValidations: [ExcelValidation] {
+            guard isTemplate else { return [] }
+            let title = isChinese ? "请选择" : "Choose a value"
+            let prompt = isChinese ? "请从下拉列表中选择。" : "Choose from the drop-down list."
+            let referencePrompt = isChinese
+                ? "请从当前工作表已填写的任务编号中选择；留空表示顶级任务。"
+                : "Choose a Task ID from this sheet; leave blank for a root Task."
+            let errorTitle = isChinese ? "值无效" : "Invalid value"
+            let error = isChinese ? "请选择列表中的值。" : "Choose a value from the list."
+            return [
+                ExcelValidation(
+                    range: "D2:D2001",
+                    source: .values(isChinese ? ["待办", "进行中", "已完成"] : ["todo", "inProgress", "done"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "E2:E2001",
+                    source: .values(isChinese ? ["无", "低", "中", "高"] : ["none", "low", "medium", "high"]),
+                    promptTitle: title, prompt: prompt, errorTitle: errorTitle, error: error
+                ),
+                ExcelValidation(
+                    range: "F2:F2001",
+                    source: .namedRange("TaskKeys"),
+                    promptTitle: isChinese ? "选择父任务" : "Choose a Parent Task",
+                    prompt: referencePrompt, errorTitle: errorTitle, error: error
+                )
+            ]
+        }
+
+        var projectInstructionRows: [[ExcelCell]] {
+            if isChinese {
+                return [
+                    [.text("工作表"), .text("字段"), .text("说明"), .text("可用值或填写方式")],
+                    [.text("开始填写"), .text("任务"), .text("本工作簿只导入到打开导入操作的当前项目，无需填写所属项目"), .text("模板已默认打开任务工作表")],
+                    [.text("更新规则"), .text("任务编号"), .text("新建时可留空；保留项目导出的编号再导入会更新原任务"), .text("编号不为空时必须唯一")],
+                    [.text("任务"), .text("标题与描述"), .text("标题必填，描述可留空"), .text("文本")],
+                    [.text("任务"), .text("状态"), .text("使用单元格下拉选择"), .text("待办、进行中、已完成")],
+                    [.text("任务"), .text("优先级"), .text("使用单元格下拉选择"), .text("无、低、中、高")],
+                    [.text("任务"), .text("父任务"), .text("仅可引用当前工作表或当前项目中的任务编号"), .text("留空表示顶级任务")],
+                    [.text("任务"), .text("安排日期 / 截止日期"), .text("与手动新建任务一致"), .text("Excel 日期或 yyyy-MM-dd")],
+                    [.text("安全规则"), .text("冲突"), .text("其他项目或收件箱已使用的编号会阻止导入"), .text("请改为空白编号或使用当前项目编号")]
+                ]
+            }
+            return [
+                [.text("Sheet"), .text("Field"), .text("Description"), .text("Allowed values or input")],
+                [.text("Start here"), .text("Tasks"), .text("This workbook imports only into the Project where Import Tasks was opened; no Project field is required"), .text("The template opens on the Tasks sheet")],
+                [.text("Update rule"), .text("Task ID"), .text("Leave blank to create; retain an ID from a Project export to update that Task"), .text("Every nonblank ID must be unique")],
+                [.text("Tasks"), .text("Title and description"), .text("Title is required; description is optional"), .text("Text")],
+                [.text("Tasks"), .text("Status"), .text("Use the cell drop-down"), .text("todo, inProgress, done")],
+                [.text("Tasks"), .text("Priority"), .text("Use the cell drop-down"), .text("none, low, medium, high")],
+                [.text("Tasks"), .text("Parent Task"), .text("Reference a Task ID in this sheet or the current Project only"), .text("Leave blank for a root Task")],
+                [.text("Tasks"), .text("Scheduled / due date"), .text("Matches manual Task creation"), .text("Excel date or yyyy-MM-dd")],
+                [.text("Safety"), .text("Conflicts"), .text("An ID already used by Inbox or another Project blocks import"), .text("Clear the ID or use one from this Project")]
+            ]
+        }
+
         var instructionRows: [[ExcelCell]] {
             if isChinese {
                 return [
@@ -599,6 +912,58 @@ private enum ExcelArchive {
                 isSelected: layout.isTemplate
             )),
             ("xl/worksheets/sheet3.xml", instructions(layout: layout))
+        ]
+
+        for (path, contents) in files {
+            let data = Data(contents.utf8)
+            try archive.addEntry(
+                with: path,
+                type: .file,
+                uncompressedSize: Int64(data.count),
+                compressionMethod: .deflate
+            ) { position, size in
+                let start = Int(position)
+                return data.subdata(in: start..<(start + size))
+            }
+        }
+        guard let data = archive.data else { throw ExcelWorkbookError.malformedWorkbook }
+        return data
+    }
+
+    static func makeProjectScoped(
+        projectRows: [[ExcelCell]],
+        taskRows: [[ExcelCell]],
+        templateLanguage: AppLanguage?
+    ) throws -> Data {
+        let layout = TemplateLayout(language: templateLanguage)
+        let archive = try Archive(accessMode: .create)
+        let files: [(String, String)] = [
+            ("[Content_Types].xml", contentTypes),
+            ("_rels/.rels", rootRelationships),
+            ("docProps/app.xml", appProperties),
+            ("docProps/core.xml", coreProperties),
+            ("xl/workbook.xml", workbook(layout: layout)),
+            ("xl/_rels/workbook.xml.rels", workbookRelationships),
+            ("xl/styles.xml", styles),
+            ("xl/worksheets/sheet1.xml", worksheet(
+                headers: layout.projectHeaders,
+                rows: projectRows,
+                widths: Array([30, 26, 42, 18, 20, 22, 22].prefix(layout.projectHeaders.count)),
+                validations: [],
+                isSelected: false
+            )),
+            ("xl/worksheets/sheet2.xml", worksheet(
+                headers: layout.projectTaskHeaders,
+                rows: taskRows,
+                widths: Array([32, 30, 42, 18, 18, 30, 24, 20, 24, 22, 22].prefix(layout.projectTaskHeaders.count)),
+                validations: layout.projectTaskValidations,
+                isSelected: layout.isTemplate
+            )),
+            ("xl/worksheets/sheet3.xml", worksheet(
+                headers: [layout.guideTitle, "", "", ""],
+                rows: layout.projectInstructionRows,
+                widths: [20, 24, 66, 38]
+            ))
         ]
 
         for (path, contents) in files {

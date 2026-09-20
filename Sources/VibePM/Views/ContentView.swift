@@ -1,5 +1,7 @@
+import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 import VibePMCore
 
 private enum SidebarSelection: Hashable {
@@ -66,6 +68,9 @@ struct ContentView: View {
     @State private var undoBatchID: UUID?
     @State private var undoMessage = ""
     @State private var undoToken: UUID?
+    @State private var isImportingProjectWorkbook = false
+    @State private var projectImportTargetID: UUID?
+    @State private var pendingProjectWorkbookImport: PendingProjectWorkbookImport?
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage(TaskSortOption.userDefaultsKey) private var taskSortRawValue = TaskSortOption.createdNewest.rawValue
     @AppStorage("lastAutomaticRecoveryPointAt") private var lastAutomaticRecoveryPointAt = 0.0
@@ -112,6 +117,20 @@ struct ContentView: View {
         .sheet(item: $projectEditorRequest) { request in
             projectEditor(for: request)
         }
+        .sheet(item: $pendingProjectWorkbookImport) { pending in
+            ProjectImportPreviewView(
+                projectName: pending.project.name,
+                preview: pending.preview,
+                onCancel: { pendingProjectWorkbookImport = nil },
+                onImport: { confirmProjectWorkbookImport(pending) }
+            )
+        }
+        .fileImporter(
+            isPresented: $isImportingProjectWorkbook,
+            allowedContentTypes: [.vibePMExcel],
+            allowsMultipleSelection: false,
+            onCompletion: importProjectWorkbook
+        )
         .alert(item: $projectDestructiveRequest, content: projectDestructiveAlert)
         .alert("VibePM", isPresented: $showsPersistenceError) {
             Button(L10n.text("OK"), role: .cancel) {}
@@ -240,6 +259,15 @@ struct ContentView: View {
                 },
                 onDeleteProject: selectedProject.map { project in
                     { requestDeleteProject(project) }
+                },
+                onImportProjectTasks: selectedProject.map { project in
+                    { presentProjectWorkbookImport(project) }
+                },
+                onExportProject: selectedProject.map { project in
+                    { exportProjectWorkbook(project) }
+                },
+                onExportProjectTemplate: selectedProject.map { project in
+                    { exportProjectTemplate(project) }
                 }
             )
         }
@@ -549,6 +577,108 @@ struct ContentView: View {
         }
     }
 
+    private func presentProjectWorkbookImport(_ project: Project) {
+        projectImportTargetID = project.id
+        isImportingProjectWorkbook = true
+    }
+
+    private func exportProjectWorkbook(_ project: Project) {
+        do {
+            let workbook = ProjectExcelWorkbook(project: project, tasks: availableTasks)
+            let date = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash))
+            try saveProjectExcel(
+                workbook.encoded(project: project),
+                filename: "VibePM-\(safeFilename(project.name))-\(date)",
+                message: L10n.text("Project workbook exported successfully.")
+            )
+        } catch {
+            showMessage(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
+        }
+    }
+
+    private func exportProjectTemplate(_ project: Project) {
+        do {
+            let language = L10n.selectedLanguage()
+            try saveProjectExcel(
+                ProjectExcelWorkbook.templateData(project: project, language: language),
+                filename: language.resolved() == .simplifiedChinese
+                    ? "VibePM-\(safeFilename(project.name))-任务导入模板"
+                    : "VibePM-\(safeFilename(project.name))-Task-Import-Template",
+                message: L10n.text("Project import template saved successfully.")
+            )
+        } catch {
+            showMessage(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
+        }
+    }
+
+    private func saveProjectExcel(_ data: Data, filename: String, message: String) throws {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.vibePMExcel]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = "\(filename).xlsx"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try data.write(to: url, options: .atomic)
+        showMessage(message)
+    }
+
+    private func importProjectWorkbook(_ result: Result<[URL], Error>) {
+        defer { projectImportTargetID = nil }
+        do {
+            guard let projectID = projectImportTargetID,
+                  let project = activeProjects.first(where: { $0.id == projectID }),
+                  let url = try result.get().first else { return }
+            let hasAccess = url.startAccessingSecurityScopedResource()
+            defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+            let workbook = try ProjectExcelWorkbook.decoded(from: Data(contentsOf: url))
+            pendingProjectWorkbookImport = PendingProjectWorkbookImport(
+                project: project,
+                workbook: workbook,
+                preview: ProjectWorkbookImportPreview(
+                    workbook: workbook,
+                    targetProjectID: project.id,
+                    existingTasks: tasks
+                )
+            )
+        } catch {
+            showMessage(L10n.format("Import failed: %@", arguments: [error.localizedDescription]))
+        }
+    }
+
+    private func confirmProjectWorkbookImport(_ pending: PendingProjectWorkbookImport) {
+        do {
+            let store = try RecoveryPointStore.applicationSupport()
+            _ = try store.create(
+                backup: VibePMBackup(projects: projects, tasks: tasks),
+                kind: .preImport
+            )
+            try pending.workbook.restore(
+                into: modelContext,
+                targetProjectID: pending.project.id,
+                existingTasks: tasks
+            )
+            pendingProjectWorkbookImport = nil
+            showMessage(L10n.format(
+                "Imported %d new Tasks and updated %d Tasks in %@.",
+                arguments: [pending.preview.creates, pending.preview.updates, pending.project.name]
+            ))
+            refreshReminders()
+        } catch {
+            modelContext.rollback()
+            pendingProjectWorkbookImport = nil
+            showMessage(L10n.format("Import failed: %@", arguments: [error.localizedDescription]))
+        }
+    }
+
+    private func safeFilename(_ value: String) -> String {
+        value.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+    }
+
+    private func showMessage(_ message: String) {
+        persistenceErrorMessage = message
+        showsPersistenceError = true
+    }
+
     private func restoreDeletionBatch(_ batchID: UUID) {
         TrashManager.restore(batchID: batchID, projects: projects, tasks: tasks)
         persistChanges {
@@ -678,6 +808,115 @@ struct ContentView: View {
         let active = tasks.filter { $0.deletedAt == nil }
         Task {
             try? await TaskReminderService.schedule(tasks: active)
+        }
+    }
+}
+
+private struct PendingProjectWorkbookImport: Identifiable {
+    let id = UUID()
+    let project: Project
+    let workbook: ProjectExcelWorkbook
+    let preview: ProjectWorkbookImportPreview
+}
+
+private struct ProjectImportPreviewView: View {
+    let projectName: String
+    let preview: ProjectWorkbookImportPreview
+    let onCancel: () -> Void
+    let onImport: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 12) {
+                Image(systemName: "tablecells")
+                    .font(.title2)
+                    .foregroundStyle(VibeTheme.accent)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.text("Project Import Preview"))
+                        .font(.title2.bold())
+                    Text(L10n.format("Import Tasks into %@.", arguments: [projectName]))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 10) {
+                previewMetric(L10n.text("Create"), preview.creates, color: .green)
+                previewMetric(L10n.text("Update"), preview.updates, color: VibeTheme.accent)
+                previewMetric(L10n.text("Skip"), preview.skips, color: .secondary)
+                previewMetric(L10n.text("Conflict"), preview.conflicts, color: .red)
+            }
+
+            if !preview.conflictItems.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(
+                        L10n.text("Resolve conflicts before importing."),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.headline)
+                    .foregroundStyle(.red)
+
+                    ForEach(preview.conflictItems.prefix(6)) { item in
+                        Text("• \(item.taskTitle): \(conflictText(item.reason))")
+                            .font(.callout)
+                    }
+                    if preview.conflictItems.count > 6 {
+                        Text(L10n.format(
+                            "And %d more conflicts.",
+                            arguments: [preview.conflictItems.count - 6]
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            }
+
+            Text(L10n.text("A recovery point will be created automatically before import."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Spacer()
+                Button(L10n.text("Cancel"), action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button(L10n.text("Import"), action: onImport)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!preview.canImport)
+            }
+        }
+        .padding(24)
+        .frame(width: 600)
+    }
+
+    private func previewMetric(_ title: String, _ value: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value.formatted())
+                .font(.title2.bold())
+                .foregroundStyle(color)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func conflictText(_ reason: ProjectWorkbookConflict.Reason) -> String {
+        switch reason {
+        case .identifierOutsideProject:
+            L10n.text("Task ID belongs to Inbox or another Project.")
+        case .identifierInTrash:
+            L10n.text("Task ID belongs to an item in Trash.")
+        case .parentOutsideProject:
+            L10n.text("Parent Task is not in this Project or workbook.")
+        case .invalidParent:
+            L10n.text("A Task cannot be its own Parent Task.")
+        case .parentCycle:
+            L10n.text("Parent Task relationships contain a cycle.")
         }
     }
 }
