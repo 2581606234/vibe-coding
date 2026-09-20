@@ -326,6 +326,7 @@ struct TaskCollectionView: View {
             endSelection()
         } else {
             isSelecting = true
+            selectedTaskIDs = Set(tasks.map(\.id))
         }
     }
 

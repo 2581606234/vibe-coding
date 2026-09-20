@@ -161,7 +161,10 @@ struct TrashView: View {
                     Text(subtitle)
                     if let deletedAt {
                         Text("·")
-                        Text(deletedAt, style: .relative)
+                        Text(L10n.format(
+                            "Moved to Trash: %@",
+                            arguments: [formattedDeletionDate(deletedAt)]
+                        ))
                     }
                 }
                 .font(.caption)
@@ -179,5 +182,17 @@ struct TrashView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(.separator.opacity(0.45), lineWidth: 1)
         }
+    }
+
+    private func formattedDeletionDate(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle.dateTime
+                .year()
+                .month(.abbreviated)
+                .day()
+                .hour()
+                .minute()
+                .locale(L10n.selectedLanguage().locale())
+        )
     }
 }

@@ -82,3 +82,11 @@ Exit: 48 automated tests pass, the ad-hoc signed application and DMG verify, and
 - Active data exclusion and rollback on persistence failure.
 
 Exit: 49 automated tests pass and packaged bilingual UI acceptance verifies cancel and confirm paths.
+
+## Milestone 3.1.2 — Selection and timestamp polish (0.8.2)
+
+- Stable absolute entry timestamps for Trash rows.
+- Toolbar selection action selects all currently visible Tasks immediately.
+- Second toolbar action exits selection and clears the selection.
+
+Exit: packaged UI acceptance verifies stable timestamps and select-all behavior.

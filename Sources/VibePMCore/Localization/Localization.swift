@@ -47,6 +47,7 @@ public enum L10n {
         "Undo": "撤销",
         "Moved \"%@\" to Trash.": "已将“%@”移到废纸篓。",
         "Moved %d Tasks to Trash.": "已将 %d 个任务移到废纸篓。",
+        "Moved to Trash: %@": "进入废纸篓：%@",
         "Move \"%@\" to Trash?": "将“%@”移到废纸篓？",
         "Move %d Tasks to Trash?": "将 %d 个任务移到废纸篓？",
         "Move %d Tasks to Trash": "将 %d 个任务移到废纸篓",
