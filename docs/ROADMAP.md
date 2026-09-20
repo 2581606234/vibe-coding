@@ -90,3 +90,12 @@ Exit: 49 automated tests pass and packaged bilingual UI acceptance verifies canc
 - Second toolbar action exits selection and clears the selection.
 
 Exit: packaged UI acceptance verifies stable timestamps and select-all behavior.
+
+## Milestone 3.1.3 — Complete Excel import template (0.8.3)
+
+- Task sheet is the default and leftmost template view.
+- Manual Task fields are visible together: description, scheduled date, due date, status, priority, Project, and Parent Task.
+- Localized examples, instructions, typed dates, and drop-down validation cover the complete import workflow.
+- Existing workbook import paths and older templates remain compatible.
+
+Exit: localized template round-trip tests, workbook structure checks, visual inspection, release build, and packaged app verification pass.

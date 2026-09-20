@@ -59,13 +59,26 @@ struct VibePMExcelWorkbookTests {
         #expect(first.projects.count == 1)
         #expect(first.tasks.count == 2)
         #expect(first.tasks.contains { $0.parentTaskID != nil })
+        #expect(first.tasks.allSatisfy { !$0.taskDescription.isEmpty })
+        #expect(first.tasks.allSatisfy { $0.scheduledFor != nil && $0.dueAt != nil })
+        #expect(first.tasks.contains { $0.status == .inProgress && $0.priority == .high })
         #expect(first.projects.map(\.id) == second.projects.map(\.id))
         #expect(first.tasks.map(\.id) == second.tasks.map(\.id))
         let workbookXML = try entryText("xl/workbook.xml", in: templateData)
         let taskXML = try entryText("xl/worksheets/sheet2.xml", in: templateData)
         #expect(workbookXML.contains("name=\"Projects\""))
         #expect(workbookXML.contains("name=\"Instructions\""))
+        #expect(workbookXML.contains("<workbookView activeTab=\"0\"/>"))
+        #expect(workbookXML.range(of: "name=\"Tasks\"")!.lowerBound < workbookXML.range(of: "name=\"Projects\"")!.lowerBound)
+        #expect(taskXML.contains("tabSelected=\"1\""))
+        for header in ["description", "status", "priority", "project_key", "parent_task_key", "scheduled_for", "due_at"] {
+            #expect(taskXML.contains(">\(header)<"))
+        }
         #expect(taskXML.contains("parent_task_key"))
+        #expect(taskXML.contains("sqref=\"D2:D2001\""))
+        #expect(taskXML.contains("sqref=\"E2:E2001\""))
+        #expect(taskXML.contains("sqref=\"F2:F2001\""))
+        #expect(taskXML.contains("sqref=\"G2:G2001\""))
         #expect(taskXML.contains("<formula1>ProjectKeys</formula1>"))
         #expect(taskXML.contains("<formula1>TaskKeys</formula1>"))
     }
@@ -83,16 +96,30 @@ struct VibePMExcelWorkbookTests {
         let guideXML = try entryText("xl/worksheets/sheet3.xml", in: data)
 
         #expect(workbook.projects.first?.name == "网站上线")
-        #expect(workbook.tasks.contains { $0.title == "评审首页文案" && $0.parentTaskID != nil })
+        #expect(workbook.tasks.contains {
+            $0.title == "评审首页文案"
+                && !$0.taskDescription.isEmpty
+                && $0.parentTaskID != nil
+                && $0.scheduledFor != nil
+                && $0.dueAt != nil
+                && $0.status == .todo
+                && $0.priority == .medium
+        })
         #expect(workbookXML.contains("name=\"项目\""))
         #expect(workbookXML.contains("name=\"任务\""))
+        #expect(workbookXML.range(of: "name=\"任务\"")!.lowerBound < workbookXML.range(of: "name=\"项目\"")!.lowerBound)
         #expect(workbookXML.contains("name=\"ProjectKeys\""))
         #expect(projectXML.contains("项目名称"))
         #expect(!projectXML.contains("project_key"))
         #expect(projectXML.contains("sqref=\"D2:D1001\""))
         #expect(taskXML.contains("父任务"))
+        for header in ["任务描述", "状态", "优先级", "所属项目", "父任务", "安排日期", "截止日期"] {
+            #expect(taskXML.contains(">\(header)<"))
+        }
+        #expect(taskXML.contains("tabSelected=\"1\""))
         #expect(taskXML.contains("sqref=\"G2:G2001\""))
         #expect(taskXML.contains("<formula1>TaskKeys</formula1>"))
+        #expect(guideXML.contains("任务工作表与手动新建任务字段一致"))
         #expect(guideXML.contains("父任务；从任务键下拉列表选择"))
     }
 

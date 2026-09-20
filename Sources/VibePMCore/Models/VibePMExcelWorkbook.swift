@@ -56,7 +56,7 @@ public struct VibePMExcelWorkbook: Sendable {
                 [
                     .text(isChinese ? "任务-首页文案评审" : "task-review-homepage-copy"),
                     .text(isChinese ? "评审首页文案" : "Review homepage copy"),
-                    .text(""),
+                    .text(isChinese ? "确认首页标题、正文和行动按钮文案" : "Confirm the homepage headline, body copy, and call to action"),
                     .text(isChinese ? "待办" : "todo"),
                     .text(isChinese ? "中" : "medium"),
                     .text(isChinese ? "项目-网站上线" : "project-website-launch"),
@@ -438,6 +438,7 @@ private enum ExcelArchive {
             if isChinese {
                 return [
                     [.text("工作表"), .text("字段"), .text("说明"), .text("可用值或填写方式")],
+                    [.text("开始填写"), .text("任务"), .text("任务工作表与手动新建任务字段一致，包含描述、安排日期、截止日期、状态、优先级、所属项目和父任务"), .text("模板已默认打开任务工作表")],
                     [.text("项目"), .text("project_key"), .text("项目唯一键，供任务引用；必填且不可重复"), .text("建议使用容易识别的文本")],
                     [.text("项目"), .text("name"), .text("项目名称；必填"), .text("文本")],
                     [.text("项目"), .text("description"), .text("项目描述"), .text("文本，可留空")],
@@ -459,6 +460,7 @@ private enum ExcelArchive {
             }
             return [
                 [.text("Sheet"), .text("Field"), .text("Description"), .text("Allowed values or input")],
+                [.text("Start here"), .text("Tasks"), .text("The Tasks sheet matches manual Task creation, including description, scheduled date, due date, status, priority, Project, and Parent Task"), .text("The template opens on the Tasks sheet")],
                 [.text("Projects"), .text("project_key"), .text("Unique Project key used by Tasks; required and unique"), .text("Readable text is recommended")],
                 [.text("Projects"), .text("name"), .text("Project name; required"), .text("Text")],
                 [.text("Projects"), .text("description"), .text("Project description"), .text("Text; optional")],
@@ -499,13 +501,15 @@ private enum ExcelArchive {
                 headers: layout.projectHeaders,
                 rows: projectRows,
                 widths: [26, 26, 42, 18, 20, 22, 22],
-                validations: layout.projectValidations
+                validations: layout.projectValidations,
+                isSelected: false
             )),
             ("xl/worksheets/sheet2.xml", worksheet(
                 headers: layout.taskHeaders,
                 rows: taskRows,
                 widths: [28, 30, 42, 18, 18, 28, 30, 24, 20, 24, 22, 22],
-                validations: layout.taskValidations
+                validations: layout.taskValidations,
+                isSelected: layout.isTemplate
             )),
             ("xl/worksheets/sheet3.xml", instructions(layout: layout))
         ]
@@ -530,7 +534,8 @@ private enum ExcelArchive {
         headers: [String],
         rows: [[ExcelCell]],
         widths: [Double],
-        validations: [ExcelValidation] = []
+        validations: [ExcelValidation] = [],
+        isSelected: Bool = false
     ) -> String {
         let columnXML = widths.enumerated().map { index, width in
             "<col min=\"\(index + 1)\" max=\"\(index + 1)\" width=\"\(width)\" customWidth=\"1\"/>"
@@ -546,10 +551,11 @@ private enum ExcelArchive {
         }.joined()
         let lastColumn = columnName(headers.count - 1)
         let validationXML = dataValidationsXML(validations)
+        let selectedAttribute = isSelected ? " tabSelected=\"1\"" : ""
 
         return xmlHeader + """
         <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-          <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+          <sheetViews><sheetView\(selectedAttribute) workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
           <sheetFormatPr defaultRowHeight="20"/>
           <cols>\(columnXML)</cols>
           <sheetData><row r="1" ht="26" customHeight="1">\(headerXML)</row>\(bodyXML)</sheetData>
@@ -667,13 +673,27 @@ private enum ExcelArchive {
             definedNames = ""
         }
 
+        let sheets: String
+        if layout.isTemplate {
+            // Keep the physical worksheet paths stable for backward-compatible decoding,
+            // while presenting the complete Task input sheet first to the user.
+            sheets = """
+                <sheet name="\(escape(layout.taskSheet))" sheetId="2" r:id="rId2"/>
+                <sheet name="\(escape(layout.projectSheet))" sheetId="1" r:id="rId1"/>
+                <sheet name="\(escape(layout.instructionSheet))" sheetId="3" r:id="rId3"/>
+            """
+        } else {
+            sheets = """
+                <sheet name="\(escape(layout.projectSheet))" sheetId="1" r:id="rId1"/>
+                <sheet name="\(escape(layout.taskSheet))" sheetId="2" r:id="rId2"/>
+                <sheet name="\(escape(layout.instructionSheet))" sheetId="3" r:id="rId3"/>
+            """
+        }
+
         return xmlHeader + """
         <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-          <sheets>
-            <sheet name="\(escape(layout.projectSheet))" sheetId="1" r:id="rId1"/>
-            <sheet name="\(escape(layout.taskSheet))" sheetId="2" r:id="rId2"/>
-            <sheet name="\(escape(layout.instructionSheet))" sheetId="3" r:id="rId3"/>
-          </sheets>
+          <bookViews><workbookView activeTab="0"/></bookViews>
+          <sheets>\(sheets)</sheets>
           \(definedNames)
         </workbook>
         """
