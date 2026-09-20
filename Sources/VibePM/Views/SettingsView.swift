@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -10,10 +11,6 @@ struct SettingsView: View {
 
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage(AppLanguage.userDefaultsKey) private var appLanguageRawValue = AppLanguage.system.rawValue
-    @State private var exportDocument: SpreadsheetDocument?
-    @State private var exportFilename = "VibePM"
-    @State private var exportSuccessMessage = ""
-    @State private var isExporting = false
     @State private var isImporting = false
     @State private var backupDocument: JSONBackupDocument?
     @State private var backupFilename = "VibePM-Recovery-Point"
@@ -42,19 +39,6 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 640, height: 560)
-        .fileExporter(
-            isPresented: $isExporting,
-            document: exportDocument,
-            contentType: .vibePMExcel,
-            defaultFilename: exportFilename
-        ) { result in
-            switch result {
-            case .success:
-                showStatus(exportSuccessMessage)
-            case let .failure(error):
-                showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
-            }
-        }
         .fileImporter(
             isPresented: $isImporting,
             allowedContentTypes: [.vibePMExcel],
@@ -255,10 +239,11 @@ struct SettingsView: View {
                 projects: projects.filter { $0.deletedAt == nil },
                 tasks: tasks.filter { $0.deletedAt == nil }
             )
-            exportDocument = SpreadsheetDocument(data: try workbook.encoded())
-            exportFilename = workbookFilename
-            exportSuccessMessage = L10n.text("Excel workbook exported successfully.")
-            isExporting = true
+            try saveExcel(
+                try workbook.encoded(),
+                filename: workbookFilename,
+                successMessage: L10n.text("Excel workbook exported successfully.")
+            )
         } catch {
             showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
         }
@@ -267,15 +252,27 @@ struct SettingsView: View {
     private func exportTemplate() {
         do {
             let language = AppLanguage(rawValue: appLanguageRawValue) ?? .system
-            exportDocument = SpreadsheetDocument(data: try VibePMExcelWorkbook.templateData(language: language))
-            exportFilename = language.resolved() == .simplifiedChinese
-                ? "VibePM-导入模板"
-                : "VibePM-Import-Template"
-            exportSuccessMessage = L10n.text("Excel import template saved successfully.")
-            isExporting = true
+            try saveExcel(
+                try VibePMExcelWorkbook.templateData(language: language),
+                filename: language.resolved() == .simplifiedChinese
+                    ? "VibePM-导入模板"
+                    : "VibePM-Import-Template",
+                successMessage: L10n.text("Excel import template saved successfully.")
+            )
         } catch {
             showStatus(L10n.format("Export failed: %@", arguments: [error.localizedDescription]))
         }
+    }
+
+    private func saveExcel(_ data: Data, filename: String, successMessage: String) throws {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.vibePMExcel]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = "\(filename).xlsx"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try data.write(to: url, options: .atomic)
+        showStatus(successMessage)
     }
 
     private func importBackup(_ result: Result<[URL], Error>) {

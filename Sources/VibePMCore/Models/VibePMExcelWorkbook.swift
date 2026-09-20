@@ -6,15 +6,26 @@ import ZIPFoundation
 public struct VibePMExcelWorkbook: Sendable {
     public let projects: [ProjectRecord]
     public let tasks: [TaskRecord]
+    private let includesProjectAuditTimestamps: Bool
+    private let includesTaskAuditTimestamps: Bool
 
     public init(projects: [Project], tasks: [ProjectTask]) {
         self.projects = projects.map(ProjectRecord.init)
         self.tasks = tasks.map(TaskRecord.init)
+        includesProjectAuditTimestamps = true
+        includesTaskAuditTimestamps = true
     }
 
-    private init(projects: [ProjectRecord], tasks: [TaskRecord]) {
+    private init(
+        projects: [ProjectRecord],
+        tasks: [TaskRecord],
+        includesProjectAuditTimestamps: Bool,
+        includesTaskAuditTimestamps: Bool
+    ) {
         self.projects = projects
         self.tasks = tasks
+        self.includesProjectAuditTimestamps = includesProjectAuditTimestamps
+        self.includesTaskAuditTimestamps = includesTaskAuditTimestamps
     }
 
     public func encoded() throws -> Data {
@@ -29,15 +40,26 @@ public struct VibePMExcelWorkbook: Sendable {
         let language = language.resolved()
         let isChinese = language == .simplifiedChinese
         return try ExcelArchive.make(
-            projectRows: [[
-                .text(isChinese ? "项目-网站上线" : "project-website-launch"),
-                .text(isChinese ? "网站上线" : "Website launch"),
-                .text(isChinese ? "准备并发布新网站" : "Prepare and publish the new website"),
-                .text(isChinese ? "靛蓝" : "indigo"),
-                .text(isChinese ? "否" : "FALSE"),
-                .blank,
-                .blank
-            ]],
+            projectRows: [
+                [
+                    .text(isChinese ? "项目-网站上线" : "project-website-launch"),
+                    .text(isChinese ? "网站上线" : "Website launch"),
+                    .text(isChinese ? "准备并发布新网站" : "Prepare and publish the new website"),
+                    .text(isChinese ? "靛蓝" : "indigo"),
+                    .text(isChinese ? "否" : "FALSE"),
+                    .blank,
+                    .blank
+                ],
+                [
+                    .blank,
+                    .text(isChinese ? "未编号项目示例" : "Unnumbered Project example"),
+                    .text(isChinese ? "编号留空时，导入会自动生成" : "Import generates an ID when this cell is blank"),
+                    .text(isChinese ? "蓝色" : "blue"),
+                    .text(isChinese ? "否" : "FALSE"),
+                    .blank,
+                    .blank
+                ]
+            ],
             taskRows: [
                 [
                     .text(isChinese ? "任务-网站上线" : "task-website-launch"),
@@ -54,7 +76,7 @@ public struct VibePMExcelWorkbook: Sendable {
                     .blank
                 ],
                 [
-                    .text(isChinese ? "任务-首页文案评审" : "task-review-homepage-copy"),
+                    .blank,
                     .text(isChinese ? "评审首页文案" : "Review homepage copy"),
                     .text(isChinese ? "确认首页标题、正文和行动按钮文案" : "Confirm the homepage headline, body copy, and call to action"),
                     .text(isChinese ? "待办" : "todo"),
@@ -77,26 +99,30 @@ public struct VibePMExcelWorkbook: Sendable {
         let sharedStrings = try archive.sharedStrings()
         let projectTable = try archive.table(at: "xl/worksheets/sheet1.xml", sharedStrings: sharedStrings)
         let taskTable = try archive.table(at: "xl/worksheets/sheet2.xml", sharedStrings: sharedStrings)
+        let projectHeaders = projectTable.canonicalHeaders
+        let taskHeaders = taskTable.canonicalHeaders
 
         let projectRows = try projectTable.records(
             sheet: "Projects",
-            requiredHeaders: ExcelArchive.projectHeaders
+            requiredHeaders: ExcelArchive.projectRequiredHeaders
         )
         let taskRows = try taskTable.records(
             sheet: "Tasks",
-            requiredHeaders: ExcelArchive.taskHeaders
+            requiredHeaders: ExcelArchive.taskRequiredHeaders
         )
 
         var projectIDs: [String: UUID] = [:]
         var projectRecords: [ProjectRecord] = []
         for (index, row) in projectRows.enumerated() {
             let rowNumber = index + 2
-            let key = try row.required("project_key", sheet: "Projects", row: rowNumber)
-            guard projectIDs[key] == nil else {
-                throw ExcelWorkbookError.duplicateKey(sheet: "Projects", key: key)
+            let key = row["project_key"].flatMap(Self.nonEmpty)
+            if let key {
+                guard projectIDs[key] == nil else {
+                    throw ExcelWorkbookError.duplicateKey(sheet: "Projects", key: key)
+                }
             }
-            let id = stableID(namespace: "project", key: key)
-            projectIDs[key] = id
+            let id = key.map { stableID(namespace: "project", key: $0) } ?? UUID()
+            if let key { projectIDs[key] = id }
             let now = Date.now
             projectRecords.append(ProjectRecord(
                 id: id,
@@ -112,18 +138,22 @@ public struct VibePMExcelWorkbook: Sendable {
         }
 
         var taskIDs: [String: UUID] = [:]
-        for (index, row) in taskRows.enumerated() {
-            let key = try row.required("task_key", sheet: "Tasks", row: index + 2)
-            guard taskIDs[key] == nil else {
-                throw ExcelWorkbookError.duplicateKey(sheet: "Tasks", key: key)
+        var taskRowIDs: [UUID] = []
+        for row in taskRows {
+            let key = row["task_key"].flatMap(Self.nonEmpty)
+            if let key {
+                guard taskIDs[key] == nil else {
+                    throw ExcelWorkbookError.duplicateKey(sheet: "Tasks", key: key)
+                }
             }
-            taskIDs[key] = stableID(namespace: "task", key: key)
+            let id = key.map { stableID(namespace: "task", key: $0) } ?? UUID()
+            taskRowIDs.append(id)
+            if let key { taskIDs[key] = id }
         }
 
         var taskRecords: [TaskRecord] = []
         for (index, row) in taskRows.enumerated() {
             let rowNumber = index + 2
-            let key = try row.required("task_key", sheet: "Tasks", row: rowNumber)
             let projectKey = row["project_key"].flatMap(Self.nonEmpty)
             let parentKey = row["parent_task_key"].flatMap(Self.nonEmpty)
 
@@ -141,7 +171,7 @@ public struct VibePMExcelWorkbook: Sendable {
             let now = Date.now
             let status = try parseStatus(row["status"], row: rowNumber)
             taskRecords.append(TaskRecord(
-                id: taskIDs[key]!,
+                id: taskRowIDs[index],
                 title: try row.required("title", sheet: "Tasks", row: rowNumber),
                 taskDescription: row["description"] ?? "",
                 status: status,
@@ -158,16 +188,59 @@ public struct VibePMExcelWorkbook: Sendable {
             ))
         }
 
-        return Self(projects: projectRecords, tasks: taskRecords)
+        return Self(
+            projects: projectRecords,
+            tasks: taskRecords,
+            includesProjectAuditTimestamps: projectHeaders.contains("created_at") && projectHeaders.contains("updated_at"),
+            includesTaskAuditTimestamps: taskHeaders.contains("created_at") && taskHeaders.contains("updated_at")
+        )
     }
 
     @MainActor
     public func restore(into context: ModelContext) throws {
+        let existingProjects = try context.fetch(FetchDescriptor<Project>())
+        let existingTasks = try context.fetch(FetchDescriptor<ProjectTask>())
+        let projectsByID = Dictionary(uniqueKeysWithValues: existingProjects.map { ($0.id, $0) })
+        let tasksByID = Dictionary(uniqueKeysWithValues: existingTasks.map { ($0.id, $0) })
+        let importedAt = Date.now
+        let normalizedProjects = projects.map { record in
+            guard !includesProjectAuditTimestamps else { return record }
+            return ProjectRecord(
+                id: record.id,
+                name: record.name,
+                projectDescription: record.projectDescription,
+                createdAt: projectsByID[record.id]?.createdAt ?? importedAt,
+                updatedAt: importedAt,
+                isArchived: record.isArchived,
+                accent: record.accent,
+                deletedAt: record.deletedAt,
+                deletionBatchID: record.deletionBatchID
+            )
+        }
+        let normalizedTasks = tasks.map { record in
+            guard !includesTaskAuditTimestamps else { return record }
+            return TaskRecord(
+                id: record.id,
+                title: record.title,
+                taskDescription: record.taskDescription,
+                status: record.status,
+                priority: record.priority,
+                projectID: record.projectID,
+                parentTaskID: record.parentTaskID,
+                scheduledFor: record.scheduledFor,
+                dueAt: record.dueAt,
+                completedAt: record.completedAt,
+                createdAt: tasksByID[record.id]?.createdAt ?? importedAt,
+                updatedAt: importedAt,
+                deletedAt: record.deletedAt,
+                deletionBatchID: record.deletionBatchID
+            )
+        }
         let backup = VibePMBackup(
             schemaVersion: VibePMBackup.currentSchemaVersion,
             exportedAt: .now,
-            projects: projects,
-            tasks: tasks
+            projects: normalizedProjects,
+            tasks: normalizedTasks
         )
         try backup.restore(into: context)
     }
@@ -328,10 +401,17 @@ private enum ExcelArchive {
     static let projectHeaders = [
         "project_key", "name", "description", "accent", "archived", "created_at", "updated_at"
     ]
+    static let projectRequiredHeaders = [
+        "project_key", "name", "description", "accent", "archived"
+    ]
     static let taskHeaders = [
         "task_key", "title", "description", "status", "priority",
         "project_key", "parent_task_key", "scheduled_for", "due_at",
         "completed_at", "created_at", "updated_at"
+    ]
+    static let taskRequiredHeaders = [
+        "task_key", "title", "description", "status", "priority",
+        "project_key", "parent_task_key", "scheduled_for", "due_at", "completed_at"
     ]
 
     private struct ExcelValidation {
@@ -363,17 +443,24 @@ private enum ExcelArchive {
         var guideTitle: String { isChinese ? "VibePM Excel 导入模板说明" : "VibePM Excel Import Guide" }
 
         var projectHeaders: [String] {
-            guard isChinese else { return ExcelArchive.projectHeaders }
-            return [
-                "项目键", "项目名称", "项目描述", "主题色", "是否归档", "创建时间", "更新时间"
-            ]
+            guard isTemplate else { return ExcelArchive.projectHeaders }
+            if isChinese {
+                return ["项目编号（新建可留空）", "项目名称", "项目描述", "主题色", "是否归档"]
+            }
+            return ["Project ID (optional for new)", "Project name", "Project description", "Accent", "Archived"]
         }
 
         var taskHeaders: [String] {
-            guard isChinese else { return ExcelArchive.taskHeaders }
+            guard isTemplate else { return ExcelArchive.taskHeaders }
+            if isChinese {
+                return [
+                    "任务编号（新建可留空）", "任务标题", "任务描述", "状态", "优先级", "所属项目", "父任务",
+                    "安排日期", "截止日期", "完成时间"
+                ]
+            }
             return [
-                "任务键", "任务标题", "任务描述", "状态", "优先级", "所属项目", "父任务",
-                "安排日期", "截止日期", "完成时间", "创建时间", "更新时间"
+                "Task ID (optional for new)", "Task title", "Task description", "Status", "Priority",
+                "Project ID", "Parent Task ID", "Scheduled date", "Due date", "Completed at"
             ]
         }
 
@@ -439,12 +526,13 @@ private enum ExcelArchive {
                 return [
                     [.text("工作表"), .text("字段"), .text("说明"), .text("可用值或填写方式")],
                     [.text("开始填写"), .text("任务"), .text("任务工作表与手动新建任务字段一致，包含描述、安排日期、截止日期、状态、优先级、所属项目和父任务"), .text("模板已默认打开任务工作表")],
-                    [.text("项目"), .text("project_key"), .text("项目唯一键，供任务引用；必填且不可重复"), .text("建议使用容易识别的文本")],
+                    [.text("更新规则"), .text("编号"), .text("新建时编号可以留空，系统会自动生成；现有数据导出会带出编号，保留编号再导入将更新原记录"), .text("编号不为空时必须唯一")],
+                    [.text("项目"), .text("project_key"), .text("项目编号；新建可留空，如需被任务引用则必须填写"), .text("可使用易识别文本；导出数据使用 UUID")],
                     [.text("项目"), .text("name"), .text("项目名称；必填"), .text("文本")],
                     [.text("项目"), .text("description"), .text("项目描述"), .text("文本，可留空")],
                     [.text("项目"), .text("accent"), .text("项目主题色；单元格提供下拉选择"), .text("靛蓝、蓝色、薄荷绿、橙色、玫红、紫色")],
                     [.text("项目"), .text("archived"), .text("是否归档；单元格提供下拉选择"), .text("是、否")],
-                    [.text("任务"), .text("task_key"), .text("任务唯一键；父任务通过该键引用；必填且不可重复"), .text("建议使用容易识别的文本")],
+                    [.text("任务"), .text("task_key"), .text("任务编号；新建可留空，如需被子任务引用则必须填写"), .text("可使用易识别文本；导出数据使用 UUID")],
                     [.text("任务"), .text("title"), .text("任务标题；必填"), .text("文本")],
                     [.text("任务"), .text("description"), .text("任务描述"), .text("文本，可留空")],
                     [.text("任务"), .text("status"), .text("任务状态；单元格提供下拉选择"), .text("待办、进行中、已完成")],
@@ -454,19 +542,19 @@ private enum ExcelArchive {
                     [.text("任务"), .text("scheduled_for"), .text("安排日期"), .text("Excel 日期或 yyyy-MM-dd")],
                     [.text("任务"), .text("due_at"), .text("截止日期"), .text("Excel 日期或 yyyy-MM-dd")],
                     [.text("任务"), .text("completed_at"), .text("完成时间；通常可留空，已完成任务会自动补全"), .text("日期时间，可留空")],
-                    [.text("全部"), .text("created_at, updated_at"), .text("创建和更新时间；导入模板中可以留空"), .text("日期时间，可留空")],
                     [.text("说明"), .text("导入规则"), .text("相同键更新现有记录，其他本地数据不会被删除"), .text("模板已经包含父任务和子任务示例")]
                 ]
             }
             return [
                 [.text("Sheet"), .text("Field"), .text("Description"), .text("Allowed values or input")],
                 [.text("Start here"), .text("Tasks"), .text("The Tasks sheet matches manual Task creation, including description, scheduled date, due date, status, priority, Project, and Parent Task"), .text("The template opens on the Tasks sheet")],
-                [.text("Projects"), .text("project_key"), .text("Unique Project key used by Tasks; required and unique"), .text("Readable text is recommended")],
+                [.text("Update rule"), .text("ID"), .text("Leave the ID blank to create a record automatically. Exports include IDs; keep an exported ID to update that record on import"), .text("Every nonblank ID must be unique")],
+                [.text("Projects"), .text("project_key"), .text("Project ID; optional for a new row, but required when a Task references it"), .text("Readable text or an exported UUID")],
                 [.text("Projects"), .text("name"), .text("Project name; required"), .text("Text")],
                 [.text("Projects"), .text("description"), .text("Project description"), .text("Text; optional")],
                 [.text("Projects"), .text("accent"), .text("Project color; use the cell drop-down"), .text("indigo, blue, mint, orange, rose, purple")],
                 [.text("Projects"), .text("archived"), .text("Archive state; use the cell drop-down"), .text("TRUE, FALSE")],
-                [.text("Tasks"), .text("task_key"), .text("Unique Task key referenced by Subtasks; required and unique"), .text("Readable text is recommended")],
+                [.text("Tasks"), .text("task_key"), .text("Task ID; optional for a new row, but required when a Subtask references it"), .text("Readable text or an exported UUID")],
                 [.text("Tasks"), .text("title"), .text("Task title; required"), .text("Text")],
                 [.text("Tasks"), .text("description"), .text("Task description"), .text("Text; optional")],
                 [.text("Tasks"), .text("status"), .text("Task status; use the cell drop-down"), .text("todo, inProgress, done")],
@@ -476,7 +564,6 @@ private enum ExcelArchive {
                 [.text("Tasks"), .text("scheduled_for"), .text("Scheduled date"), .text("Excel date or yyyy-MM-dd")],
                 [.text("Tasks"), .text("due_at"), .text("Due date"), .text("Excel date or yyyy-MM-dd")],
                 [.text("Tasks"), .text("completed_at"), .text("Completion timestamp; usually blank and filled for done Tasks"), .text("Date and time; optional")],
-                [.text("All"), .text("created_at, updated_at"), .text("Audit timestamps; optional in the import template"), .text("Date and time; optional")],
                 [.text("Note"), .text("Import behavior"), .text("Matching keys update records; other local data is kept"), .text("Parent and Subtask examples are included")]
             ]
         }
@@ -500,14 +587,14 @@ private enum ExcelArchive {
             ("xl/worksheets/sheet1.xml", worksheet(
                 headers: layout.projectHeaders,
                 rows: projectRows,
-                widths: [26, 26, 42, 18, 20, 22, 22],
+                widths: Array([30, 26, 42, 18, 20, 22, 22].prefix(layout.projectHeaders.count)),
                 validations: layout.projectValidations,
                 isSelected: false
             )),
             ("xl/worksheets/sheet2.xml", worksheet(
                 headers: layout.taskHeaders,
                 rows: taskRows,
-                widths: [28, 30, 42, 18, 18, 28, 30, 24, 20, 24, 22, 22],
+                widths: Array([32, 30, 42, 18, 18, 28, 30, 24, 20, 24, 22, 22].prefix(layout.taskHeaders.count)),
                 validations: layout.taskValidations,
                 isSelected: layout.isTemplate
             )),
@@ -757,23 +844,14 @@ private extension Archive {
 }
 
 private extension Array where Element == [String] {
+    var canonicalHeaders: [String] {
+        guard let headerRow = first else { return [] }
+        return headerRow.map(Self.canonicalHeader)
+    }
+
     func records(sheet: String, requiredHeaders: [String]) throws -> [[String: String]] {
         guard let headerRow = first else { throw ExcelWorkbookError.emptyWorksheet(sheet) }
-        let headers = headerRow.map { header in
-            let trimmed = header.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let aliases = [
-                "项目键": "project_key", "项目名称": "name", "项目描述": "description",
-                "主题色": "accent", "是否归档": "archived", "任务键": "task_key",
-                "任务标题": "title", "任务描述": "description", "状态": "status",
-                "优先级": "priority", "所属项目": "project_key", "所属项目键": "project_key",
-                "父任务": "parent_task_key", "父任务键": "parent_task_key",
-                "安排日期": "scheduled_for", "截止日期": "due_at", "完成时间": "completed_at",
-                "创建时间": "created_at", "更新时间": "updated_at"
-            ]
-            if let alias = aliases[trimmed] { return alias }
-            return trimmed.split(separator: "/", omittingEmptySubsequences: true).last
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? trimmed
-        }
+        let headers = headerRow.map(Self.canonicalHeader)
         for requiredHeader in requiredHeaders where !headers.contains(requiredHeader) {
             throw ExcelWorkbookError.missingColumn(sheet: sheet, column: requiredHeader)
         }
@@ -784,6 +862,30 @@ private extension Array where Element == [String] {
             })
             return values.values.allSatisfy(\.isEmpty) ? nil : values
         }
+    }
+
+    private static func canonicalHeader(_ header: String) -> String {
+        let trimmed = header.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let aliases = [
+            "项目键": "project_key", "项目编号": "project_key", "项目编号（新建可留空）": "project_key",
+            "project id": "project_key", "project id (optional for new)": "project_key",
+            "项目名称": "name", "project name": "name",
+            "项目描述": "description", "project description": "description",
+            "主题色": "accent", "accent": "accent", "是否归档": "archived", "archived": "archived",
+            "任务键": "task_key", "任务编号": "task_key", "任务编号（新建可留空）": "task_key",
+            "task id": "task_key", "task id (optional for new)": "task_key",
+            "任务标题": "title", "task title": "title",
+            "任务描述": "description", "task description": "description",
+            "状态": "status", "status": "status", "优先级": "priority", "priority": "priority",
+            "所属项目": "project_key", "所属项目键": "project_key",
+            "父任务": "parent_task_key", "父任务键": "parent_task_key",
+            "parent task id": "parent_task_key", "安排日期": "scheduled_for", "scheduled date": "scheduled_for",
+            "截止日期": "due_at", "due date": "due_at", "完成时间": "completed_at", "completed at": "completed_at",
+            "创建时间": "created_at", "更新时间": "updated_at"
+        ]
+        if let alias = aliases[trimmed] { return alias }
+        return trimmed.split(separator: "/", omittingEmptySubsequences: true).last
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? trimmed
     }
 }
 

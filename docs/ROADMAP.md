@@ -99,3 +99,13 @@ Exit: packaged UI acceptance verifies stable timestamps and select-all behavior.
 - Existing workbook import paths and older templates remain compatible.
 
 Exit: localized template round-trip tests, workbook structure checks, visual inspection, release build, and packaged app verification pass.
+
+## Milestone 3.1.4 — Import identity and audit fields (0.8.4)
+
+- New-record template IDs are optional and generated during import when blank.
+- Full exports carry stable UUIDs so edited rows reimport as updates.
+- Existing-data and template exports use a reliable native macOS save panel.
+- System-created and updated timestamps are removed from templates but retained in full exports.
+- Timestamp-free updates preserve the original creation time and record the import as the latest update.
+
+Exit: blank-ID creation, exported-ID update preview, timestamp preservation, compatibility, packaging, and workbook visual checks pass.

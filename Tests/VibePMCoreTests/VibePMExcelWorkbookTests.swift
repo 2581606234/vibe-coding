@@ -34,6 +34,9 @@ struct VibePMExcelWorkbookTests {
             projects: [project],
             tasks: [child, parent]
         ).encoded()
+        if let outputPath = ProcessInfo.processInfo.environment["VIBEPM_EXPORT_OUTPUT"] {
+            try data.write(to: URL(fileURLWithPath: outputPath))
+        }
         let decoded = try VibePMExcelWorkbook.decoded(from: data)
 
         #expect(data.starts(with: [0x50, 0x4B]))
@@ -45,6 +48,12 @@ struct VibePMExcelWorkbookTests {
         #expect(decoded.tasks.first(where: { $0.id == child.id })?.parentTaskID == parent.id)
         #expect(abs((decoded.tasks.first(where: { $0.id == parent.id })?.scheduledFor?.timeIntervalSince(start)) ?? 99) < 1)
         #expect(abs((decoded.tasks.first(where: { $0.id == parent.id })?.updatedAt.timeIntervalSince(parent.updatedAt)) ?? 99) < 1)
+        let projectXML = try entryText("xl/worksheets/sheet1.xml", in: data)
+        let taskXML = try entryText("xl/worksheets/sheet2.xml", in: data)
+        #expect(projectXML.contains(project.id.uuidString))
+        #expect(taskXML.contains(parent.id.uuidString))
+        #expect(projectXML.contains(">created_at<") && projectXML.contains(">updated_at<"))
+        #expect(taskXML.contains(">created_at<") && taskXML.contains(">updated_at<"))
     }
 
     @Test("Downloadable template contains examples with valid relationships")
@@ -56,25 +65,31 @@ struct VibePMExcelWorkbookTests {
         let first = try VibePMExcelWorkbook.decoded(from: templateData)
         let second = try VibePMExcelWorkbook.decoded(from: VibePMExcelWorkbook.templateData(language: .english))
 
-        #expect(first.projects.count == 1)
+        #expect(first.projects.count == 2)
         #expect(first.tasks.count == 2)
         #expect(first.tasks.contains { $0.parentTaskID != nil })
         #expect(first.tasks.allSatisfy { !$0.taskDescription.isEmpty })
         #expect(first.tasks.allSatisfy { $0.scheduledFor != nil && $0.dueAt != nil })
         #expect(first.tasks.contains { $0.status == .inProgress && $0.priority == .high })
-        #expect(first.projects.map(\.id) == second.projects.map(\.id))
-        #expect(first.tasks.map(\.id) == second.tasks.map(\.id))
+        #expect(first.projects.first(where: { $0.name == "Website launch" })?.id == second.projects.first(where: { $0.name == "Website launch" })?.id)
+        #expect(first.projects.first(where: { $0.name == "Unnumbered Project example" })?.id != second.projects.first(where: { $0.name == "Unnumbered Project example" })?.id)
+        #expect(first.tasks.first(where: { $0.title == "Launch website" })?.id == second.tasks.first(where: { $0.title == "Launch website" })?.id)
+        #expect(first.tasks.first(where: { $0.title == "Review homepage copy" })?.id != second.tasks.first(where: { $0.title == "Review homepage copy" })?.id)
         let workbookXML = try entryText("xl/workbook.xml", in: templateData)
+        let projectXML = try entryText("xl/worksheets/sheet1.xml", in: templateData)
         let taskXML = try entryText("xl/worksheets/sheet2.xml", in: templateData)
         #expect(workbookXML.contains("name=\"Projects\""))
         #expect(workbookXML.contains("name=\"Instructions\""))
         #expect(workbookXML.contains("<workbookView activeTab=\"0\"/>"))
         #expect(workbookXML.range(of: "name=\"Tasks\"")!.lowerBound < workbookXML.range(of: "name=\"Projects\"")!.lowerBound)
         #expect(taskXML.contains("tabSelected=\"1\""))
-        for header in ["description", "status", "priority", "project_key", "parent_task_key", "scheduled_for", "due_at"] {
+        for header in ["Task description", "Status", "Priority", "Project ID", "Parent Task ID", "Scheduled date", "Due date"] {
             #expect(taskXML.contains(">\(header)<"))
         }
-        #expect(taskXML.contains("parent_task_key"))
+        #expect(projectXML.contains("Project ID (optional for new)"))
+        #expect(taskXML.contains("Task ID (optional for new)"))
+        #expect(!projectXML.contains(">created_at<") && !projectXML.contains(">updated_at<"))
+        #expect(!taskXML.contains(">created_at<") && !taskXML.contains(">updated_at<"))
         #expect(taskXML.contains("sqref=\"D2:D2001\""))
         #expect(taskXML.contains("sqref=\"E2:E2001\""))
         #expect(taskXML.contains("sqref=\"F2:F2001\""))
@@ -110,9 +125,13 @@ struct VibePMExcelWorkbookTests {
         #expect(workbookXML.range(of: "name=\"任务\"")!.lowerBound < workbookXML.range(of: "name=\"项目\"")!.lowerBound)
         #expect(workbookXML.contains("name=\"ProjectKeys\""))
         #expect(projectXML.contains("项目名称"))
+        #expect(projectXML.contains("项目编号（新建可留空）"))
         #expect(!projectXML.contains("project_key"))
+        #expect(!projectXML.contains("创建时间") && !projectXML.contains("更新时间"))
         #expect(projectXML.contains("sqref=\"D2:D1001\""))
         #expect(taskXML.contains("父任务"))
+        #expect(taskXML.contains("任务编号（新建可留空）"))
+        #expect(!taskXML.contains("创建时间") && !taskXML.contains("更新时间"))
         for header in ["任务描述", "状态", "优先级", "所属项目", "父任务", "安排日期", "截止日期"] {
             #expect(taskXML.contains(">\(header)<"))
         }
@@ -120,7 +139,42 @@ struct VibePMExcelWorkbookTests {
         #expect(taskXML.contains("sqref=\"G2:G2001\""))
         #expect(taskXML.contains("<formula1>TaskKeys</formula1>"))
         #expect(guideXML.contains("任务工作表与手动新建任务字段一致"))
+        #expect(guideXML.contains("新建时编号可以留空"))
         #expect(guideXML.contains("父任务；从任务键下拉列表选择"))
+    }
+
+    @MainActor
+    @Test("Timestamp-free template updates preserve creation time")
+    func templateUpdatePreservesCreationTime() throws {
+        let workbook = try VibePMExcelWorkbook.decoded(
+            from: VibePMExcelWorkbook.templateData(language: .english)
+        )
+        let importedProject = try #require(workbook.projects.first { $0.name == "Website launch" })
+        let originalCreatedAt = Date(timeIntervalSince1970: 1_600_000_000)
+        let originalUpdatedAt = Date(timeIntervalSince1970: 1_650_000_000)
+        let existing = Project(
+            id: importedProject.id,
+            name: "Old name",
+            createdAt: originalCreatedAt,
+            updatedAt: originalUpdatedAt
+        )
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: Project.self,
+            ProjectTask.self,
+            configurations: configuration
+        )
+        let context = container.mainContext
+        context.insert(existing)
+
+        try workbook.restore(into: context)
+
+        let restored = try #require(
+            context.fetch(FetchDescriptor<Project>()).first { $0.id == existing.id }
+        )
+        #expect(restored.name == "Website launch")
+        #expect(restored.createdAt == originalCreatedAt)
+        #expect(restored.updatedAt > originalUpdatedAt)
     }
 
     @MainActor
