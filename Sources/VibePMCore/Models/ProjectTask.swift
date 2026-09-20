@@ -45,6 +45,8 @@ public final class ProjectTask {
     public var completedAt: Date?
     public var createdAt: Date
     public var updatedAt: Date
+    public var deletedAt: Date?
+    public var deletionBatchID: UUID?
 
     public var status: TaskStatus {
         get { TaskStatus(rawValue: statusRawValue) ?? .todo }
@@ -68,7 +70,9 @@ public final class ProjectTask {
         dueAt: Date? = nil,
         completedAt: Date? = nil,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        deletionBatchID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -82,6 +86,8 @@ public final class ProjectTask {
         self.completedAt = completedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.deletionBatchID = deletionBatchID
     }
 
     public func markDone(at date: Date = .now) {
@@ -101,5 +107,16 @@ public final class ProjectTask {
         completedAt = newStatus == .done ? date : nil
         updatedAt = date
     }
-}
 
+    public func moveToTrash(batchID: UUID, at date: Date = .now) {
+        deletedAt = date
+        deletionBatchID = batchID
+        updatedAt = date
+    }
+
+    public func restoreFromTrash(at date: Date = .now) {
+        deletedAt = nil
+        deletionBatchID = nil
+        updatedAt = date
+    }
+}

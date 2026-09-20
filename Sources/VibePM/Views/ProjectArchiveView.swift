@@ -58,7 +58,7 @@ struct ProjectArchiveView: View {
                                     Button(role: .destructive) {
                                         onDelete(project)
                                     } label: {
-                                        Label(L10n.text("Delete Project"), systemImage: "trash")
+                                        Label(L10n.text("Move to Trash"), systemImage: "trash")
                                     }
                                     .buttonStyle(.bordered)
                                 }

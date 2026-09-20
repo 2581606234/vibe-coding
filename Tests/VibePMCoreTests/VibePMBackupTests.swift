@@ -69,6 +69,45 @@ struct VibePMBackupTests {
     }
 
     @Test
+    @MainActor
+    func replacingLocalDataRemovesRecordsOutsideSnapshot() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let kept = Project(name: "Keep")
+        let removed = Project(name: "Remove")
+        context.insert(kept)
+        context.insert(removed)
+        context.insert(ProjectTask(title: "Imported extra", projectID: removed.id))
+        try context.save()
+
+        let snapshotProject = Project(id: kept.id, name: "Restored")
+        let backup = VibePMBackup(projects: [snapshotProject], tasks: [])
+        try backup.replaceLocalData(in: context)
+
+        let projects = try context.fetch(FetchDescriptor<Project>())
+        let tasks = try context.fetch(FetchDescriptor<ProjectTask>())
+        #expect(projects.map(\.name) == ["Restored"])
+        #expect(tasks.isEmpty)
+    }
+
+    @Test
+    func versionOneBackupRemainsReadable() throws {
+        let data = Data(
+            """
+            {
+              "schemaVersion": 1,
+              "exportedAt": "2026-01-01T00:00:00Z",
+              "projects": [],
+              "tasks": []
+            }
+            """.utf8
+        )
+
+        let backup = try VibePMBackup.decoded(from: data)
+        #expect(backup.schemaVersion == 1)
+    }
+
+    @Test
     func unsupportedSchemaIsRejected() throws {
         let data = Data(
             """

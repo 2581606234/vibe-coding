@@ -65,7 +65,7 @@ struct TaskCollectionView: View {
         .background(VibeTheme.canvas)
         .alert(deleteConfirmationTitle, isPresented: $showsDeleteConfirmation) {
             Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Delete"), role: .destructive, action: confirmDeletion)
+            Button(L10n.text("Move to Trash"), role: .destructive, action: confirmDeletion)
         } message: {
             Text(deleteConfirmationMessage)
         }
@@ -87,7 +87,7 @@ struct TaskCollectionView: View {
                 if isSelecting && !selectedTaskIDs.isEmpty {
                     Button(role: .destructive, action: requestBulkDelete) {
                         Label(
-                            L10n.format("Delete %d Tasks", arguments: [selectedTaskIDs.count]),
+                            L10n.format("Move %d Tasks to Trash", arguments: [selectedTaskIDs.count]),
                             systemImage: "trash"
                         )
                     }
@@ -178,7 +178,7 @@ struct TaskCollectionView: View {
                     .buttonStyle(.borderless)
 
                     if !selectedTaskIDs.isEmpty {
-                        Button(L10n.text("Delete"), systemImage: "trash", role: .destructive) {
+                        Button(L10n.text("Move to Trash"), systemImage: "trash", role: .destructive) {
                             requestBulkDelete()
                         }
                         .buttonStyle(.borderedProminent)
@@ -200,7 +200,7 @@ struct TaskCollectionView: View {
                 Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchiveProject)
                 Divider()
                 Button(
-                    L10n.text("Delete Project"),
+                    L10n.text("Move to Trash"),
                     systemImage: "trash",
                     role: .destructive,
                     action: onDeleteProject
@@ -309,16 +309,16 @@ struct TaskCollectionView: View {
 
     private var deleteConfirmationTitle: String {
         if let pendingTaskName {
-            return L10n.format("Delete \"%@\"?", arguments: [pendingTaskName])
+            return L10n.format("Move \"%@\" to Trash?", arguments: [pendingTaskName])
         }
-        return L10n.format("Delete %d Tasks?", arguments: [pendingDeletionIDs.count])
+        return L10n.format("Move %d Tasks to Trash?", arguments: [pendingDeletionIDs.count])
     }
 
     private var deleteConfirmationMessage: String {
         if pendingTaskName != nil {
-            return L10n.text("This Task and all of its Subtasks will be permanently deleted. This cannot be undone.")
+            return L10n.text("This Task and its Subtasks can be restored from Trash for 30 days.")
         }
-        return L10n.text("The selected Tasks and all of their Subtasks will be permanently deleted. This cannot be undone.")
+        return L10n.text("The selected Tasks and their Subtasks can be restored from Trash for 30 days.")
     }
 
     private func toggleSelectionMode() {

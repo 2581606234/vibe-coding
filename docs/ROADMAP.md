@@ -56,3 +56,21 @@ The next work should prioritize trust and planning depth in this order:
 7. Add recurring Tasks and more precise reminder controls.
 8. Add tags and saved smart views for cross-Project organization.
 9. Add an in-app update path and notarized distribution for dependable upgrades.
+
+## Milestone 3.1 — Data trust (0.8.0)
+
+- Recoverable 30-day Trash for Projects, Tasks, and deletion batches.
+- Immediate Undo and explicit persistence-error feedback.
+- Daily automatic, manual, exportable, and pre-import Recovery Points.
+- Excel Import Preview with create/update counts and cancel-before-write behavior.
+
+Exit: 48 automated tests pass, the ad-hoc signed application and DMG verify, and bilingual acceptance is recorded in `docs/acceptance/0.8.0.md`.
+
+## Next iteration candidates
+
+1. Bulk edit and bulk move for selected Tasks.
+2. Manual drag ordering and saved view preferences per Project.
+3. Milestones and Task dependencies, including dependency lines in Gantt.
+4. Recurring Tasks and reminder lead-time controls.
+5. Tags and saved smart views across Projects.
+6. Notarized distribution and an in-app update channel.

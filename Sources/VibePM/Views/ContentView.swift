@@ -7,6 +7,7 @@ private enum SidebarSelection: Hashable {
     case today
     case project(UUID)
     case archive
+    case trash
 }
 
 private struct TaskEditorRequest: Identifiable {
@@ -60,20 +61,42 @@ struct ContentView: View {
     @State private var priorityFilter: TaskPriority?
     @State private var statusFilter: TaskStatus?
     @State private var taskViewMode: TaskViewMode = .list
+    @State private var persistenceErrorMessage: String?
+    @State private var showsPersistenceError = false
+    @State private var undoBatchID: UUID?
+    @State private var undoMessage = ""
+    @State private var undoToken: UUID?
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage(TaskSortOption.userDefaultsKey) private var taskSortRawValue = TaskSortOption.createdNewest.rawValue
+    @AppStorage("lastAutomaticRecoveryPointAt") private var lastAutomaticRecoveryPointAt = 0.0
 
     private var activeProjects: [Project] {
-        projects.filter { !$0.isArchived }
+        projects.filter { $0.deletedAt == nil && !$0.isArchived }
     }
 
     private var archivedProjects: [Project] {
-        projects.filter(\.isArchived)
+        projects.filter { $0.deletedAt == nil && $0.isArchived }
+    }
+
+    private var availableTasks: [ProjectTask] {
+        tasks.filter { $0.deletedAt == nil }
+    }
+
+    private var trashedProjects: [Project] {
+        projects.filter { $0.deletedAt != nil }
+    }
+
+    private var trashTaskGroups: [TrashTaskGroup] {
+        let deletedProjectIDs = Set(trashedProjects.map(\.id))
+        let independentTasks = tasks.filter { task in
+            task.deletedAt != nil && !(task.projectID.map { deletedProjectIDs.contains($0) } ?? false)
+        }
+        return TrashTaskGroup.make(from: independentTasks)
     }
 
     private var selectedProject: Project? {
         guard case let .project(id) = selection else { return nil }
-        return projects.first { $0.id == id }
+        return activeProjects.first { $0.id == id }
     }
 
     var body: some View {
@@ -90,8 +113,21 @@ struct ContentView: View {
             projectEditor(for: request)
         }
         .alert(item: $projectDestructiveRequest, content: projectDestructiveAlert)
+        .alert("VibePM", isPresented: $showsPersistenceError) {
+            Button(L10n.text("OK"), role: .cancel) {}
+        } message: {
+            Text(persistenceErrorMessage ?? L10n.text("Unable to save changes."))
+        }
         .searchable(text: $searchText, placement: .toolbar, prompt: L10n.text("Search Tasks"))
         .tint(VibeTheme.accent)
+        .safeAreaInset(edge: .bottom) {
+            if undoBatchID != nil {
+                undoBar
+            }
+        }
+        .task {
+            performLaunchMaintenance()
+        }
     }
 
     private var sidebar: some View {
@@ -146,6 +182,14 @@ struct ContentView: View {
                     color: .secondary
                 )
                 .tag(SidebarSelection.archive)
+
+                sidebarRow(
+                    title: L10n.text("Trash"),
+                    systemImage: "trash.fill",
+                    count: trashedProjects.count + trashTaskGroups.count,
+                    color: .secondary
+                )
+                .tag(SidebarSelection.trash)
             }
         }
         .listStyle(.sidebar)
@@ -160,6 +204,15 @@ struct ContentView: View {
                 taskCount: taskCount,
                 onRestore: restoreProject,
                 onDelete: requestDeleteProject
+            )
+        } else if selection == .trash {
+            TrashView(
+                projects: trashedProjects,
+                taskGroups: trashTaskGroups,
+                taskCount: { project in tasks.count { $0.projectID == project.id } },
+                onRestore: restoreDeletionBatch,
+                onPermanentlyDeleteProject: permanentlyDeleteProject,
+                onPermanentlyDeleteTaskGroup: permanentlyDeleteTaskGroup
             )
         } else {
             TaskCollectionView(
@@ -201,6 +254,8 @@ struct ContentView: View {
             projects.first(where: { $0.id == id })?.name ?? L10n.text("Project")
         case .archive:
             L10n.text("Archive")
+        case .trash:
+            L10n.text("Trash")
         }
     }
 
@@ -223,6 +278,8 @@ struct ContentView: View {
                 : L10n.text("Move this Project toward its outcome.")
         case .archive:
             ""
+        case .trash:
+            ""
         }
     }
 
@@ -234,6 +291,7 @@ struct ContentView: View {
         switch selection {
         case .today: "sun.max.fill"
         case .project: "folder.fill"
+        case .trash: "trash.fill"
         default: "checklist"
         }
     }
@@ -243,17 +301,17 @@ struct ContentView: View {
 
         switch selection {
         case .inbox, .none:
-            scopedTasks = tasks.filter { $0.projectID == nil }
+            scopedTasks = availableTasks.filter { $0.projectID == nil }
         case .today:
             let calendar = Calendar.current
-            scopedTasks = tasks.filter { task in
+            scopedTasks = availableTasks.filter { task in
                 guard task.status != .done else { return false }
                 return task.scheduledFor.map(calendar.isDateInToday) == true
                     || task.dueAt.map(calendar.isDateInToday) == true
             }
         case let .project(id):
-            scopedTasks = tasks.filter { $0.projectID == id }
-        case .archive:
+            scopedTasks = availableTasks.filter { $0.projectID == id }
+        case .archive, .trash:
             return []
         }
 
@@ -266,12 +324,12 @@ struct ContentView: View {
     }
 
     private var inboxTaskCount: Int {
-        tasks.count { $0.projectID == nil && $0.parentTaskID == nil && $0.status != .done }
+        availableTasks.count { $0.projectID == nil && $0.parentTaskID == nil && $0.status != .done }
     }
 
     private var todayTaskCount: Int {
         let calendar = Calendar.current
-        return tasks.count { task in
+        return availableTasks.count { task in
             guard task.status != .done else { return false }
             return task.scheduledFor.map(calendar.isDateInToday) == true
                 || task.dueAt.map(calendar.isDateInToday) == true
@@ -279,7 +337,7 @@ struct ContentView: View {
     }
 
     private func taskCount(for project: Project) -> Int {
-        tasks.count { $0.projectID == project.id && $0.status != .done }
+        availableTasks.count { $0.projectID == project.id && $0.status != .done }
     }
 
     private func sidebarRow(
@@ -318,31 +376,27 @@ struct ContentView: View {
 
     private func archiveProject(_ project: Project) {
         project.archive()
-        try? modelContext.save()
-        selection = .inbox
+        persistChanges {
+            selection = .inbox
+        }
     }
 
     private func restoreProject(_ project: Project) {
         project.restore()
-        try? modelContext.save()
-        selection = .project(project.id)
+        persistChanges {
+            selection = .project(project.id)
+        }
     }
 
     private func deleteProject(_ project: Project) {
-        let deletionTaskIDs = ProjectDeletion.taskIDs(for: project.id, in: tasks)
-        let remainingTasks = tasks.filter { !deletionTaskIDs.contains($0.id) }
-
-        for task in tasks where deletionTaskIDs.contains(task.id) {
-            modelContext.delete(task)
-        }
-        modelContext.delete(project)
-        try? modelContext.save()
-        selection = .inbox
-
-        if remindersEnabled {
-            Task {
-                try? await TaskReminderService.schedule(tasks: remainingTasks)
-            }
+        let batchID = TrashManager.moveProject(project, tasks: tasks)
+        persistChanges {
+            selection = .inbox
+            showUndo(
+                batchID: batchID,
+                message: L10n.format("Moved \"%@\" to Trash.", arguments: [project.name])
+            )
+            refreshReminders()
         }
     }
 
@@ -359,9 +413,9 @@ struct ContentView: View {
             )
         case let .delete(project):
             Alert(
-                title: Text(L10n.format("Delete \"%@\"?", arguments: [project.name])),
-                message: Text(L10n.text("The Project and all of its Tasks and Subtasks will be permanently deleted. This cannot be undone.")),
-                primaryButton: .destructive(Text(L10n.text("Delete Project"))) {
+                title: Text(L10n.format("Move \"%@\" to Trash?", arguments: [project.name])),
+                message: Text(L10n.text("The Project and its Tasks can be restored from Trash for 30 days.")),
+                primaryButton: .destructive(Text(L10n.text("Move to Trash"))) {
                     deleteProject(project)
                 },
                 secondaryButton: .cancel(Text(L10n.text("Cancel")))
@@ -379,7 +433,9 @@ struct ContentView: View {
             ) { draft in
                 let project = draft.makeProject()
                 modelContext.insert(project)
-                selection = .project(project.id)
+                return persistChanges {
+                    selection = .project(project.id)
+                }
             }
         case let .edit(project):
             ProjectEditorView(
@@ -387,6 +443,7 @@ struct ContentView: View {
                 draft: ProjectDraft(project: project)
             ) { draft in
                 draft.apply(to: project)
+                return persistChanges()
             }
         }
     }
@@ -425,7 +482,10 @@ struct ContentView: View {
                 parentTasks: parentTaskCandidates()
             ) { draft in
                 modelContext.insert(normalizedHierarchy(draft).makeTask())
-                taskEditorRequest = nil
+                return persistChanges {
+                    taskEditorRequest = nil
+                    refreshReminders()
+                }
             }
         case let .edit(task):
             TaskEditorView(
@@ -435,13 +495,16 @@ struct ContentView: View {
                 parentTasks: parentTaskCandidates(excluding: task.id)
             ) { draft in
                 normalizedHierarchy(draft).apply(to: task)
-                taskEditorRequest = nil
+                return persistChanges {
+                    taskEditorRequest = nil
+                    refreshReminders()
+                }
             }
         }
     }
 
     private func parentTaskCandidates(excluding taskID: UUID? = nil) -> [ProjectTask] {
-        tasks.filter { task in
+        availableTasks.filter { task in
             task.parentTaskID == nil && task.id != taskID
         }
     }
@@ -449,7 +512,7 @@ struct ContentView: View {
     private func normalizedHierarchy(_ draft: TaskDraft) -> TaskDraft {
         var draft = draft
         if let parentTaskID = draft.parentTaskID,
-           let parent = tasks.first(where: { $0.id == parentTaskID }) {
+           let parent = availableTasks.first(where: { $0.id == parentTaskID }) {
             draft.projectID = parent.projectID
         }
         return draft
@@ -461,25 +524,144 @@ struct ContentView: View {
         } else {
             task.markDone()
         }
+        persistChanges {
+            refreshReminders()
+        }
     }
 
     private func moveTask(_ task: ProjectTask, to status: TaskStatus) {
         task.move(to: status)
+        persistChanges {
+            refreshReminders()
+        }
     }
 
     private func deleteTasks(_ selectedIDs: Set<UUID>) {
-        let deletionIDs = TaskHierarchy.deletionIDs(selectedIDs: selectedIDs, in: tasks)
-        let remainingTasks = tasks.filter { !deletionIDs.contains($0.id) }
+        let batchID = TrashManager.moveTasks(selectedIDs: selectedIDs, in: tasks)
+        let movedCount = tasks.count { $0.deletionBatchID == batchID }
+        persistChanges {
+            showUndo(
+                batchID: batchID,
+                message: L10n.format("Moved %d Tasks to Trash.", arguments: [movedCount])
+            )
+            refreshReminders()
+        }
+    }
 
-        for task in tasks where deletionIDs.contains(task.id) {
+    private func restoreDeletionBatch(_ batchID: UUID) {
+        TrashManager.restore(batchID: batchID, projects: projects, tasks: tasks)
+        persistChanges {
+            if undoBatchID == batchID {
+                undoBatchID = nil
+                undoToken = nil
+            }
+            refreshReminders()
+        }
+    }
+
+    private func permanentlyDeleteProject(_ project: Project) {
+        for task in tasks where task.projectID == project.id {
             modelContext.delete(task)
         }
-        try? modelContext.save()
+        modelContext.delete(project)
+        persistChanges()
+    }
 
-        if remindersEnabled {
-            Task {
-                try? await TaskReminderService.schedule(tasks: remainingTasks)
+    private func permanentlyDeleteTaskGroup(_ group: TrashTaskGroup) {
+        for task in group.tasks {
+            modelContext.delete(task)
+        }
+        persistChanges()
+    }
+
+    @discardableResult
+    private func persistChanges(onSuccess: () -> Void = {}) -> Bool {
+        do {
+            try modelContext.save()
+            onSuccess()
+            return true
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = L10n.format(
+                "Unable to save changes: %@",
+                arguments: [error.localizedDescription]
+            )
+            showsPersistenceError = true
+            return false
+        }
+    }
+
+    private func showUndo(batchID: UUID, message: String) {
+        let token = UUID()
+        undoBatchID = batchID
+        undoMessage = message
+        undoToken = token
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            guard undoToken == token else { return }
+            undoBatchID = nil
+            undoToken = nil
+        }
+    }
+
+    private var undoBar: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "trash")
+            Text(undoMessage)
+                .lineLimit(1)
+            Spacer()
+            Button(L10n.text("Undo")) {
+                if let undoBatchID {
+                    restoreDeletionBatch(undoBatchID)
+                }
             }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 52)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func performLaunchMaintenance() {
+        let expiredProjectIDs = TrashManager.expiredProjectIDs(in: projects)
+        let expiredTaskIDs = TrashManager.expiredTaskIDs(in: tasks)
+        for task in tasks where expiredTaskIDs.contains(task.id) || (task.projectID.map { expiredProjectIDs.contains($0) } ?? false) {
+            modelContext.delete(task)
+        }
+        for project in projects where expiredProjectIDs.contains(project.id) {
+            modelContext.delete(project)
+        }
+
+        if !expiredProjectIDs.isEmpty || !expiredTaskIDs.isEmpty {
+            persistChanges()
+        }
+
+        do {
+            let store = try RecoveryPointStore.applicationSupport()
+            let currentProjects = try modelContext.fetch(FetchDescriptor<Project>())
+            let currentTasks = try modelContext.fetch(FetchDescriptor<ProjectTask>())
+            if let descriptor = try store.createAutomaticIfNeeded(
+                backup: VibePMBackup(projects: currentProjects, tasks: currentTasks)
+            ) {
+                lastAutomaticRecoveryPointAt = descriptor.createdAt.timeIntervalSince1970
+            } else if let latest = try store.descriptors().first(where: { $0.kind == .automatic }) {
+                lastAutomaticRecoveryPointAt = latest.createdAt.timeIntervalSince1970
+            }
+        } catch {
+            persistenceErrorMessage = L10n.format(
+                "Unable to create a recovery point: %@",
+                arguments: [error.localizedDescription]
+            )
+            showsPersistenceError = true
+        }
+    }
+
+    private func refreshReminders() {
+        guard remindersEnabled else { return }
+        let active = tasks.filter { $0.deletedAt == nil }
+        Task {
+            try? await TaskReminderService.schedule(tasks: active)
         }
     }
 }
@@ -532,7 +714,7 @@ private struct ProjectSidebarRow: View {
             Button(L10n.text("Edit Project"), systemImage: "pencil", action: onEdit)
             Button(L10n.text("Archive Project"), systemImage: "archivebox", action: onArchive)
             Divider()
-            Button(L10n.text("Delete Project"), systemImage: "trash", role: .destructive, action: onDelete)
+            Button(L10n.text("Move to Trash"), systemImage: "trash", role: .destructive, action: onDelete)
         }
     }
 }

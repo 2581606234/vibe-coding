@@ -2,7 +2,8 @@ import Foundation
 import SwiftData
 
 public struct VibePMBackup: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
+    public static let supportedSchemaVersions = 1...currentSchemaVersion
 
     public let schemaVersion: Int
     public let exportedAt: Date
@@ -43,7 +44,7 @@ public struct VibePMBackup: Codable, Equatable, Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup = try decoder.decode(Self.self, from: data)
-        guard backup.schemaVersion == currentSchemaVersion else {
+        guard supportedSchemaVersions.contains(backup.schemaVersion) else {
             throw BackupError.unsupportedSchemaVersion(backup.schemaVersion)
         }
         return backup
@@ -51,7 +52,7 @@ public struct VibePMBackup: Codable, Equatable, Sendable {
 
     @MainActor
     public func restore(into context: ModelContext) throws {
-        guard schemaVersion == Self.currentSchemaVersion else {
+        guard Self.supportedSchemaVersions.contains(schemaVersion) else {
             throw BackupError.unsupportedSchemaVersion(schemaVersion)
         }
 
@@ -83,6 +84,49 @@ public struct VibePMBackup: Codable, Equatable, Sendable {
 
         try context.save()
     }
+
+    @MainActor
+    public func replaceLocalData(in context: ModelContext) throws {
+        guard Self.supportedSchemaVersions.contains(schemaVersion) else {
+            throw BackupError.unsupportedSchemaVersion(schemaVersion)
+        }
+
+        let storedProjects = try context.fetch(FetchDescriptor<Project>())
+        let storedTasks = try context.fetch(FetchDescriptor<ProjectTask>())
+        var projectsByID = Dictionary(uniqueKeysWithValues: storedProjects.map { ($0.id, $0) })
+        var tasksByID = Dictionary(uniqueKeysWithValues: storedTasks.map { ($0.id, $0) })
+        let snapshotProjectIDs = Set(projects.map(\.id))
+        let snapshotTaskIDs = Set(tasks.map(\.id))
+
+        for record in projects {
+            if let project = projectsByID[record.id] {
+                record.apply(to: project)
+            } else {
+                let project = record.makeProject()
+                context.insert(project)
+                projectsByID[record.id] = project
+            }
+        }
+
+        for record in tasks {
+            if let task = tasksByID[record.id] {
+                record.apply(to: task)
+            } else {
+                let task = record.makeTask()
+                context.insert(task)
+                tasksByID[record.id] = task
+            }
+        }
+
+        for task in storedTasks where !snapshotTaskIDs.contains(task.id) {
+            context.delete(task)
+        }
+        for project in storedProjects where !snapshotProjectIDs.contains(project.id) {
+            context.delete(project)
+        }
+
+        try context.save()
+    }
 }
 
 public struct ProjectRecord: Codable, Equatable, Sendable {
@@ -93,6 +137,8 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
     public let updatedAt: Date
     public let isArchived: Bool
     public let accent: ProjectAccent
+    public let deletedAt: Date?
+    public let deletionBatchID: UUID?
 
     init(
         id: UUID,
@@ -101,7 +147,9 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
         createdAt: Date,
         updatedAt: Date,
         isArchived: Bool,
-        accent: ProjectAccent
+        accent: ProjectAccent,
+        deletedAt: Date? = nil,
+        deletionBatchID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -110,6 +158,8 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.isArchived = isArchived
         self.accent = accent
+        self.deletedAt = deletedAt
+        self.deletionBatchID = deletionBatchID
     }
 
     init(project: Project) {
@@ -120,6 +170,8 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
         updatedAt = project.updatedAt
         isArchived = project.isArchived
         accent = project.accent
+        deletedAt = project.deletedAt
+        deletionBatchID = project.deletionBatchID
     }
 
     func makeProject() -> Project {
@@ -130,6 +182,8 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             isArchived: isArchived,
+            deletedAt: deletedAt,
+            deletionBatchID: deletionBatchID,
             accent: accent
         )
     }
@@ -141,6 +195,8 @@ public struct ProjectRecord: Codable, Equatable, Sendable {
         project.updatedAt = updatedAt
         project.isArchived = isArchived
         project.accent = accent
+        project.deletedAt = deletedAt
+        project.deletionBatchID = deletionBatchID
     }
 }
 
@@ -157,6 +213,8 @@ public struct TaskRecord: Codable, Equatable, Sendable {
     public let completedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date
+    public let deletedAt: Date?
+    public let deletionBatchID: UUID?
 
     init(
         id: UUID,
@@ -170,7 +228,9 @@ public struct TaskRecord: Codable, Equatable, Sendable {
         dueAt: Date?,
         completedAt: Date?,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        deletedAt: Date? = nil,
+        deletionBatchID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -184,6 +244,8 @@ public struct TaskRecord: Codable, Equatable, Sendable {
         self.completedAt = completedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.deletionBatchID = deletionBatchID
     }
 
     init(task: ProjectTask) {
@@ -199,6 +261,8 @@ public struct TaskRecord: Codable, Equatable, Sendable {
         completedAt = task.completedAt
         createdAt = task.createdAt
         updatedAt = task.updatedAt
+        deletedAt = task.deletedAt
+        deletionBatchID = task.deletionBatchID
     }
 
     func makeTask() -> ProjectTask {
@@ -214,7 +278,9 @@ public struct TaskRecord: Codable, Equatable, Sendable {
             dueAt: dueAt,
             completedAt: completedAt,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            deletedAt: deletedAt,
+            deletionBatchID: deletionBatchID
         )
     }
 
@@ -230,6 +296,8 @@ public struct TaskRecord: Codable, Equatable, Sendable {
         task.completedAt = completedAt
         task.createdAt = createdAt
         task.updatedAt = updatedAt
+        task.deletedAt = deletedAt
+        task.deletionBatchID = deletionBatchID
     }
 }
 

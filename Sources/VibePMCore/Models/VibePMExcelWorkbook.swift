@@ -105,7 +105,9 @@ public struct VibePMExcelWorkbook: Sendable {
                 createdAt: try parseDate(row["created_at"], sheet: "Projects", row: rowNumber, column: "created_at") ?? now,
                 updatedAt: try parseDate(row["updated_at"], sheet: "Projects", row: rowNumber, column: "updated_at") ?? now,
                 isArchived: try parseBool(row["archived"], sheet: "Projects", row: rowNumber, column: "archived"),
-                accent: try parseAccent(row["accent"], row: rowNumber)
+                accent: try parseAccent(row["accent"], row: rowNumber),
+                deletedAt: nil,
+                deletionBatchID: nil
             ))
         }
 
@@ -150,7 +152,9 @@ public struct VibePMExcelWorkbook: Sendable {
                 dueAt: try parseDate(row["due_at"], row: rowNumber, column: "due_at"),
                 completedAt: try parseDate(row["completed_at"], sheet: "Tasks", row: rowNumber, column: "completed_at") ?? (status == .done ? now : nil),
                 createdAt: try parseDate(row["created_at"], sheet: "Tasks", row: rowNumber, column: "created_at") ?? now,
-                updatedAt: try parseDate(row["updated_at"], sheet: "Tasks", row: rowNumber, column: "updated_at") ?? now
+                updatedAt: try parseDate(row["updated_at"], sheet: "Tasks", row: rowNumber, column: "updated_at") ?? now,
+                deletedAt: nil,
+                deletionBatchID: nil
             ))
         }
 

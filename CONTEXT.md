@@ -39,3 +39,19 @@ _Avoid_: Stage, column
 **Archive**:
 A collection of Projects intentionally removed from active planning without deleting their history.
 _Avoid_: Trash, deleted projects
+
+**Trash**:
+A temporary collection of deleted Projects and Tasks that remain recoverable until restored, permanently deleted, or expired.
+_Avoid_: Archive, recycle archive
+
+**Restore**:
+Return a Project or Task from Trash to the same planning context and hierarchy it had before deletion.
+_Avoid_: Unarchive, recreate
+
+**Recovery Point**:
+A dated snapshot of all locally owned VibePM data that can be used to recover from an import or persistence problem.
+_Avoid_: Export, template
+
+**Import Preview**:
+A read-only summary of the Projects and Tasks an Excel import would create or update before any local data changes.
+_Avoid_: Import result, dry-run file

@@ -21,11 +21,13 @@ The current development release is ad-hoc signed rather than notarized with an A
 4. Switch the Project between List, Board, and Gantt; confirm scheduled Tasks appear on the timeline.
 5. Move Tasks between Status columns using the status menu.
 6. Search and apply a priority or Status filter.
-7. Archive the Project, then restore it from Archive.
-8. Open Settings → Data, download the Excel template, and confirm its language follows the app and its Status, Priority, Project, and Parent Task fields provide drop-down choices.
-9. Export an Excel workbook, import the same workbook, and confirm records are merged rather than duplicated.
-10. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
-11. Quit and reopen VibePM to confirm local data and language selection persist.
+7. Move a parent Task to Trash, use Undo, then repeat and restore it from Trash; confirm its Subtasks return with it.
+8. Move the Project to Trash, restore it, then archive and restore it from Archive.
+9. Open Settings → Data, download the Excel template, and confirm its language follows the app and its Status, Priority, Project, and Parent Task fields provide drop-down choices.
+10. Import an Excel workbook, verify the Import Preview create/update counts, cancel once, then confirm the import.
+11. Create and export a Recovery Point; restore it and confirm the local snapshot is replaced exactly.
+12. Open Settings → General and switch between Simplified Chinese and English; confirm the main window updates immediately.
+13. Quit and reopen VibePM to confirm local data, language selection, and latest automatic Recovery Point time persist.
 
 ## Build a fresh package
 

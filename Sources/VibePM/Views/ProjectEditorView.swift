@@ -5,14 +5,14 @@ struct ProjectEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     let heading: String
-    let onSave: (ProjectDraft) -> Void
+    let onSave: (ProjectDraft) -> Bool
 
     @State private var draft: ProjectDraft
 
     init(
         heading: String,
         draft: ProjectDraft,
-        onSave: @escaping (ProjectDraft) -> Void
+        onSave: @escaping (ProjectDraft) -> Bool
     ) {
         self.heading = heading
         self.onSave = onSave
@@ -101,8 +101,9 @@ struct ProjectEditorView: View {
             .keyboardShortcut(.cancelAction)
 
             Button(L10n.text("Save")) {
-                onSave(draft)
-                dismiss()
+                if onSave(draft) {
+                    dismiss()
+                }
             }
             .buttonStyle(.borderedProminent)
             .tint(draft.accent.color)

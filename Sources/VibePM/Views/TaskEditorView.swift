@@ -7,7 +7,7 @@ struct TaskEditorView: View {
     let heading: String
     let projects: [Project]
     let parentTasks: [ProjectTask]
-    let onSave: (TaskDraft) -> Void
+    let onSave: (TaskDraft) -> Bool
 
     @State private var draft: TaskDraft
 
@@ -16,7 +16,7 @@ struct TaskEditorView: View {
         draft: TaskDraft,
         projects: [Project],
         parentTasks: [ProjectTask],
-        onSave: @escaping (TaskDraft) -> Void
+        onSave: @escaping (TaskDraft) -> Bool
     ) {
         self.heading = heading
         self.projects = projects
@@ -141,8 +141,9 @@ struct TaskEditorView: View {
             .keyboardShortcut(.cancelAction)
 
             Button(L10n.text("Save")) {
-                onSave(draft)
-                dismiss()
+                if onSave(draft) {
+                    dismiss()
+                }
             }
             .buttonStyle(.borderedProminent)
             .tint(VibeTheme.accent)
