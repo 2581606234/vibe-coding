@@ -3,6 +3,7 @@ import Foundation
 public enum RecoveryPointKind: String, Sendable {
     case automatic
     case preImport = "pre-import"
+    case preBulk = "pre-bulk"
     case manual
 }
 

@@ -17,6 +17,9 @@ struct TaskCollectionView: View {
     let onToggleCompletion: (ProjectTask) -> Void
     let onMove: (ProjectTask, TaskStatus) -> Void
     let onDelete: (Set<UUID>) -> Void
+    let activeProjects: [Project]
+    let allActiveTasks: [ProjectTask]
+    let onApplyBulk: (Set<UUID>, TaskBulkAction) -> Bool
     let onEditProject: (() -> Void)?
     let onArchiveProject: (() -> Void)?
     let onDeleteProject: (() -> Void)?
@@ -29,6 +32,7 @@ struct TaskCollectionView: View {
     @State private var pendingDeletionIDs: Set<UUID> = []
     @State private var pendingTaskName: String?
     @State private var showsDeleteConfirmation = false
+    @State private var showsBulkEditor = false
 
     private var orderedTasks: [ProjectTask] {
         TaskSorter.parentFirst(tasks, by: sortOption)
@@ -72,6 +76,18 @@ struct TaskCollectionView: View {
         } message: {
             Text(deleteConfirmationMessage)
         }
+        .sheet(isPresented: $showsBulkEditor) {
+            TaskBulkEditorView(
+                selectedIDs: selectedTaskIDs,
+                tasks: allActiveTasks,
+                projects: activeProjects,
+                onApply: { action in
+                    let saved = onApplyBulk(selectedTaskIDs, action)
+                    if saved { endSelection() }
+                    return saved
+                }
+            )
+        }
         .onChange(of: tasks.map(\.id)) {
             selectedTaskIDs.formIntersection(Set(tasks.map(\.id)))
             if tasks.isEmpty { endSelection() }
@@ -88,6 +104,9 @@ struct TaskCollectionView: View {
                 }
 
                 if isSelecting && !selectedTaskIDs.isEmpty {
+                    Button { showsBulkEditor = true } label: {
+                        Label(L10n.text("Edit Selected…"), systemImage: "slider.horizontal.3")
+                    }
                     Button(role: .destructive, action: requestBulkDelete) {
                         Label(
                             L10n.format("Move %d Tasks to Trash", arguments: [selectedTaskIDs.count]),
@@ -181,6 +200,11 @@ struct TaskCollectionView: View {
                     .buttonStyle(.borderless)
 
                     if !selectedTaskIDs.isEmpty {
+                        Button(L10n.text("Edit Selected…"), systemImage: "slider.horizontal.3") {
+                            showsBulkEditor = true
+                        }
+                        .buttonStyle(.bordered)
+
                         Button(L10n.text("Move to Trash"), systemImage: "trash", role: .destructive) {
                             requestBulkDelete()
                         }

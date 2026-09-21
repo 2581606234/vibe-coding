@@ -41,6 +41,8 @@ struct LocalizationTests {
         )
         #expect(L10n.text("Empty Trash", language: .simplifiedChinese) == "清空废纸篓")
         #expect(L10n.text("Empty Trash", language: .english) == "Empty Trash")
+        #expect(L10n.text("Edit Selected…", language: .simplifiedChinese) == "批量编辑…")
+        #expect(L10n.text("Keep current", language: .simplifiedChinese) == "保持原值")
         #expect(
             L10n.format("Moved to Trash: %@", language: .simplifiedChinese, arguments: ["2026-09-20 16:00"])
                 == "进入废纸篓：2026-09-20 16:00"

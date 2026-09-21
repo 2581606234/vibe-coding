@@ -251,6 +251,9 @@ struct ContentView: View {
                 onToggleCompletion: toggleCompletion,
                 onMove: moveTask,
                 onDelete: deleteTasks,
+                activeProjects: activeProjects,
+                allActiveTasks: availableTasks,
+                onApplyBulk: applyBulkAction,
                 onEditProject: selectedProject.map { project in
                     { presentProjectEditor(project) }
                 },
@@ -574,6 +577,36 @@ struct ContentView: View {
                 message: L10n.format("Moved %d Tasks to Trash.", arguments: [movedCount])
             )
             refreshReminders()
+        }
+    }
+
+    private func applyBulkAction(_ selectedIDs: Set<UUID>, _ action: TaskBulkAction) -> Bool {
+        if case let .project(projectID) = action.destination,
+           !activeProjects.contains(where: { $0.id == projectID }) {
+            persistenceErrorMessage = L10n.text("Selected destination is no longer active.")
+            showsPersistenceError = true
+            return false
+        }
+        let preview = action.preview(selectedIDs: selectedIDs, tasks: availableTasks)
+        guard preview.canApply else { return false }
+
+        do {
+            let store = try RecoveryPointStore.applicationSupport()
+            _ = try store.create(
+                backup: VibePMBackup(projects: projects, tasks: tasks),
+                kind: .preBulk
+            )
+            action.apply(selectedIDs: selectedIDs, tasks: availableTasks)
+            return persistChanges {
+                refreshReminders()
+            }
+        } catch {
+            persistenceErrorMessage = L10n.format(
+                "Unable to save changes: %@",
+                arguments: [error.localizedDescription]
+            )
+            showsPersistenceError = true
+            return false
         }
     }
 

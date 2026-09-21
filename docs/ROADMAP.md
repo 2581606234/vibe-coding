@@ -118,3 +118,11 @@ Exit: blank-ID creation, exported-ID update preview, timestamp preservation, com
 - Block cross-Project Task IDs and Parent Task references so Project imports cannot silently move or overwrite unrelated work.
 
 Exit: Project-scoped round trips, unchanged-row skipping, conflict protection, localization, global compatibility, packaging, and UI acceptance pass.
+
+## Milestone 3.2 — Bulk Task actions (0.8.6)
+
+- Edit Status and Priority for selected Tasks without changing unselected fields.
+- Move selected Tasks and their descendants between active Projects and Inbox with hierarchy safety.
+- Create a pre-bulk Recovery Point before committing a bulk change.
+
+Exit: domain edge-case tests, bilingual UI, persistence rollback, package and DMG verification pass.

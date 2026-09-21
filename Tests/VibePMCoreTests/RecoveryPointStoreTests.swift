@@ -35,4 +35,21 @@ struct RecoveryPointStoreTests {
 
         #expect(try store.descriptors().filter { $0.kind == .automatic }.count == 14)
     }
+
+    @Test("Pre-bulk Recovery Points can be listed and restored")
+    func preBulkSnapshot() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryPointStore(directoryURL: directory)
+        let project = Project(name: "Before bulk edit")
+        let task = ProjectTask(title: "Original", projectID: project.id)
+        let backup = VibePMBackup(projects: [project], tasks: [task])
+
+        let descriptor = try store.create(backup: backup, kind: .preBulk)
+        task.title = "Changed"
+        let restored = try VibePMBackup.decoded(from: Data(contentsOf: descriptor.url))
+
+        #expect(try store.descriptors().contains { $0.kind == .preBulk })
+        #expect(restored.tasks.first?.title == "Original")
+    }
 }

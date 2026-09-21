@@ -9,6 +9,7 @@ A local-first personal project manager for macOS, built with SwiftUI and SwiftDa
 - Persistent sorting by priority, schedule, due date, or creation time across every Task view
 - Local-first SwiftData persistence with visible save errors and automatic local Recovery Points
 - Editable Excel import/export with localized templates, field selectors, and a create/update Import Preview
+- Bulk Status, Priority, and Project changes with hierarchy-safe Subtask moves
 - Runtime language switching: Follow System, Simplified Chinese, or English
 
 ## Requirements
@@ -40,4 +41,4 @@ The script creates `dist/VibePM.app` and `dist/VibePM.dmg`. See `docs/INSTALL.md
 
 Product scope lives in `docs/PRODUCT.md`; delivery milestones live in `docs/ROADMAP.md`.
 
-The current development release is 0.8.5. Every Project now has scoped Excel import, export, and localized template actions with create/update/skip/conflict preview and cross-Project identity protection; requirements and acceptance evidence are in `docs/PRD-v0.8.5-project-scoped-import-export.md` and `docs/acceptance/0.8.5.md`.
+The current development release is 0.8.6. Selection mode now supports bulk Status and Priority edits plus hierarchy-safe Project moves; requirements and acceptance evidence are in `docs/PRD-v0.8.6-bulk-task-actions.md` and `docs/acceptance/0.8.6.md`.
